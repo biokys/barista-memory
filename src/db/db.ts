@@ -94,7 +94,9 @@ function seedMaintenanceTypes(db: DatabaseSync): void {
   );
   insert.run("backflush", 1, 1, 15, null, null);
   insert.run("cafiza", 2, 1, 60, null, null);
-  insert.run("descale", 3, 1, null, 40, null);
+  // ~90 ml pass the boiler per coffee (measured), so 15 l is roughly 160
+  // coffees — a few months at home use, the usual advice for medium-hard water.
+  insert.run("descale", 3, 1, null, 15, null);
   insert.run("water_filter", 4, 0, null, 100, null);
   insert.run("gasket", 5, 0, null, null, 180);
 }
