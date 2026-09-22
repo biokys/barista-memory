@@ -26,10 +26,15 @@ claude mcp add barista-memory -- \
 
 ## Backing it up
 
-The archive is one SQLite file. It is in WAL mode, so copy it with sqlite3
-rather than `cp`, which can catch it mid-write:
+The Pi holds the only live copy of every shot. `deploy/backup-db-pi.sh` runs
+**on the Pi** — not on a laptop that may be asleep — takes a transactional
+snapshot with `sqlite3 .backup` (the database is in WAL mode, so a plain copy
+can catch it mid-write), verifies the snapshot opens, and ships it gzipped to
+a backup host over ssh, keeping the last 30. Install:
 
 ```bash
-ssh <user>@<pi> "sqlite3 ~/barista-memory/data/archive.db \".backup '/tmp/archive-backup.db'\"" \
-  && scp <user>@<pi>:/tmp/archive-backup.db ./backups/archive-$(date +%F).db
+sudo apt-get install -y sqlite3
+cp deploy/backup-db-pi.sh ~/barista-memory/backup-db.sh && chmod +x ~/barista-memory/backup-db.sh
+# a key for the backup host, then in the Pi's crontab:
+17 4 * * * BACKUP_DEST=<user@backup-host>:~/backups/barista-memory ~/barista-memory/backup-db.sh >> ~/barista-memory/data/backup.log 2>&1
 ```
