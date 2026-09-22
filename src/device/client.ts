@@ -234,25 +234,3 @@ export async function fetchRawSettings(): Promise<Record<string, unknown>> {
   if (!response.ok) throw new Error(`GET /api/settings failed: HTTP ${response.status}`);
   return (await response.json()) as Record<string, unknown>;
 }
-
-/**
- * The machine's Bluetooth scale, managed by the firmware (the scale talks to
- * the machine, not to us). /api/scales/* answer 404 on a build without BLE.
- */
-export interface ScaleInfo { connected: boolean; name: string; uuid: string; rssi: number; hasBattery: boolean; battery?: number }
-export interface ScaleCandidate { uuid: string; name: string; rssi: number }
-
-async function scaleGet<T>(path: string): Promise<T | null> {
-  try {
-    const response = await fetch(`${httpBase}${path}`, { headers: { Accept: "application/json" }, signal: timeout() });
-    if (!response.ok) return null;
-    return (await response.json()) as T;
-  } catch {
-    return null;
-  }
-}
-
-export const scaleInfo = () => scaleGet<ScaleInfo>("/api/scales/info");
-export const scaleList = () => scaleGet<ScaleCandidate[]>("/api/scales/list");
-export const scaleScan = () => scaleGet<{ success: boolean }>("/api/scales/scan");
-export const scaleConnect = (uuid: string) => scaleGet<{ success: boolean }>(`/api/scales/connect?uuid=${encodeURIComponent(uuid)}`);

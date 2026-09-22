@@ -32,9 +32,6 @@ options:
   mqtt_user: ""
   mqtt_password: ""
   mcp_token: ""
-  printer_mac: ""
-  language: "en"
-  web_url: ""
 schema:
   machine_host: str
   poll_interval: int(5,600)
@@ -44,6 +41,3 @@ schema:
   mqtt_user: str?
   mqtt_password: password?
   mcp_token: password?
-  printer_mac: str?
-  language: list(en|cs)
-  web_url: str?

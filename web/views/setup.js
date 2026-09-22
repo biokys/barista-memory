@@ -12,7 +12,8 @@ export async function renderSetup(view) {
     const cur = data.current;
     view.innerHTML = `
       <h1>${t("setup.title")}</h1>
-      <div class="grid cols-2">
+      <div class="cols">
+        <div class="col">
         <section class="card">
           <div class="card-head"><h2>${t("setup.current")}</h2></div>
           ${cur ? `<div style="font-size:1.5rem;font-weight:580;letter-spacing:-.02em">${cur.bean ?? "?"}</div><div class="muted">${cur.roaster ?? ""}${cur.roast_date ? " · " + cur.roast_date : ""}</div>
@@ -20,25 +21,6 @@ export async function renderSetup(view) {
             <p class="faint small" style="margin-top:12px">${t("setup.since")} ${fmt.dateTime(cur.valid_from)}${cur.basket ? " · " + cur.basket : ""}</p>` : `<p class="muted">${t("now.no_setup")}</p>`}
         </section>
         <section class="card">
-          <div class="card-head"><h2>${t("setup.change")}</h2></div>
-          <p class="faint small" style="margin-bottom:12px">${t("setup.change_hint")}</p>
-          <form class="form" id="f">
-            <div class="grid cols-2">
-              <div class="field"><label>${t("setup.bean")}</label><input name="bean" placeholder="${cur?.bean ?? ""}"></div>
-              <div class="field"><label>${t("setup.roaster")}</label><input name="roaster" placeholder="${cur?.roaster ?? ""}"></div>
-            </div>
-            <div class="field"><label>${t("setup.grind")} · <span class="range-v num" id="gv">${cur?.grind_setting ?? "12.5"}</span></label><input type="range" name="grind_setting" min="0" max="90" step="0.1" value="${cur?.grind_setting ?? 12.5}"></div>
-            <div class="field"><label>${t("setup.dose")} · <span class="range-v num" id="dv">${cur?.dose_g ?? "18"}</span></label><input type="range" name="dose_g" min="12" max="24" step="0.1" value="${cur?.dose_g ?? 18}"></div>
-            <div class="grid cols-2">
-              <div class="field"><label>${t("setup.roast_date")}</label><input type="date" name="roast_date" value="${cur?.roast_date ?? ""}"></div>
-              <div class="field"><label>${t("setup.basket")}</label><input name="basket" placeholder="${cur?.basket ?? ""}"></div>
-            </div>
-            <div class="field"><label>${t("setup.note")}</label><input name="note"></div>
-            <div class="row"><button class="btn primary" type="submit">${t("setup.save")}</button></div>
-          </form>
-        </section>
-      </div>
-      <section class="card">
         <div class="card-head"><h2>${t("setup.history")}</h2><span class="faint small">${t("setup.edit_hint")}</span></div>
         <div class="timeline">${data.setups.map((s) => `
           <div class="tl-item ${s.id === cur?.id ? "current" : ""}" data-id="${s.id}">
@@ -57,7 +39,29 @@ export async function renderSetup(view) {
               </form>` : `
               <div class="row"><b>${s.bean ?? "–"}</b><span class="muted">${s.roaster ?? ""}</span><span class="pill num">${t("now.grind")} ${s.grind_setting ?? "–"}</span><span class="pill num">${s.dose_g ?? "–"} g</span>${s.note ? `<span class="faint small">${s.note}</span>` : ""}<button class="btn sm ghost" data-edit="${s.id}">${t("setup.edit")}</button></div>`}
           </div>`).join("")}</div>
-      </section>`;
+      </section>
+        </div>
+        <div class="col">
+        <section class="card">
+          <div class="card-head"><h2>${t("setup.change")}</h2></div>
+          <p class="faint small" style="margin-bottom:12px">${t("setup.change_hint")}</p>
+          <form class="form" id="f">
+            <div class="grid cols-2">
+              <div class="field"><label>${t("setup.bean")}</label><input name="bean" placeholder="${cur?.bean ?? ""}"></div>
+              <div class="field"><label>${t("setup.roaster")}</label><input name="roaster" placeholder="${cur?.roaster ?? ""}"></div>
+            </div>
+            <div class="field"><label>${t("setup.grind")} · <span class="range-v num" id="gv">${cur?.grind_setting ?? "12.5"}</span></label><input type="range" name="grind_setting" min="0" max="90" step="0.1" value="${cur?.grind_setting ?? 12.5}"></div>
+            <div class="field"><label>${t("setup.dose")} · <span class="range-v num" id="dv">${cur?.dose_g ?? "18"}</span></label><input type="range" name="dose_g" min="12" max="24" step="0.1" value="${cur?.dose_g ?? 18}"></div>
+            <div class="grid cols-2">
+              <div class="field"><label>${t("setup.roast_date")}</label><input type="date" name="roast_date" value="${cur?.roast_date ?? ""}"></div>
+              <div class="field"><label>${t("setup.basket")}</label><input name="basket" placeholder="${cur?.basket ?? ""}"></div>
+            </div>
+            <div class="field"><label>${t("setup.note")}</label><input name="note"></div>
+            <div class="row"><button class="btn primary" type="submit">${t("setup.save")}</button></div>
+          </form>
+        </section>
+        </div>
+      </div>`;
 
     const f = view.querySelector("#f");
     f.grind_setting.oninput = () => (view.querySelector("#gv").textContent = f.grind_setting.value);

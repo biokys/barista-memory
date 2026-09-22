@@ -7,7 +7,7 @@ import { extname, join, normalize, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "../config.js";
 import { openDatabase, currentSetup, type ShotContextRow } from "../db/db.js";
-import { listProfiles, getProfile, fetchRawSettings, scaleInfo, scaleList, scaleScan, scaleConnect } from "../device/client.js";
+import { listProfiles, getProfile, fetchRawSettings } from "../device/client.js";
 import { renderShotReceipt } from "../receipt.js";
 import { printShot, printTest, printerStatus, printerSettings, updatePrinterSettings, findPrinters } from "../printer/index.js";
 import { bluetoothAvailable } from "../printer/bluez.js";
@@ -235,25 +235,6 @@ route("POST", "/api/printer/test", async (_req, res) => {
 route("GET", "/api/printer/status", async (_req, res) => {
   const result = await printerStatus(db);
   json(res, result.ok ? 200 : 502, result);
-});
-
-// The scale belongs to the machine; these just relay its own endpoints.
-route("GET", "/api/scales", async (_req, res) => {
-  if (!(await requireMachine(res))) return;
-  json(res, 200, { info: await scaleInfo(), candidates: (await scaleList()) ?? [] });
-});
-
-route("POST", "/api/scales/scan", async (_req, res) => {
-  if (!(await requireMachine(res))) return;
-  const started = await scaleScan();
-  json(res, started ? 200 : 502, { started: !!started });
-});
-
-route("POST", "/api/scales/connect", async (req, res) => {
-  if (!(await requireMachine(res))) return;
-  const body = await readJson(req);
-  const done = await scaleConnect(String(body.uuid ?? ""));
-  json(res, done ? 200 : 502, { connected: !!done?.success });
 });
 
 route("GET", "/api/shots/:id", async (_req, res, p) => {

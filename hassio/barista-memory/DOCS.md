@@ -49,9 +49,10 @@ greeting and a QR code to the shot. The add-on reaches it through the host's
 Bluetooth (BlueZ), so the Home Assistant machine needs a Bluetooth adapter
 in range of the printer.
 
-On the **Machine** page of the web UI, scan for the printer, pick it, run a
-test print and switch on "print every shot". A **Print last shot** button
-entity appears in Home Assistant as well, for automations.
+Everything about it lives on the **Settings** page of the web UI: find the
+printer, test, switch on "print every shot", set the café name, language
+and greetings. A **Print last shot** button entity appears in Home Assistant
+as well, for automations.
 
 ## AI assistants (MCP)
 

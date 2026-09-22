@@ -3,15 +3,14 @@ import { api } from "../lib/api.js";
 import { toast } from "../lib/fmt.js";
 
 /**
- * Everything that is configured rather than observed: the receipt printer,
- * what the receipt says, and the machine's Bluetooth scale. Kept off the
- * Machine page so that one stays a reading, not a form.
+ * Everything that is configured rather than observed: the receipt printer
+ * and what the receipt says. Kept off the Machine page so that one stays a
+ * reading, not a form.
  */
 export async function renderSettings(view) {
   const load = async () => {
-    const [printer, scales, latest] = await Promise.all([
+    const [printer, latest] = await Promise.all([
       api.printer().catch(() => null),
-      api.scales().catch(() => null),
       api.shots({ limit: 1 }).catch(() => ({ shots: [] })),
     ]);
     const ps = printer?.settings;
@@ -20,18 +19,8 @@ export async function renderSettings(view) {
     view.innerHTML = `
       <h1>${t("settings.title")}</h1>
       <p class="muted" style="max-width:70ch">${t("settings.hint")}</p>
-      <div class="grid cols-2 settings-grid">
-        <section class="card">
-          <div class="card-head"><h2>${t("scale.title")}</h2><button class="btn sm ghost" id="scale-scan">${t("scale.scan")}</button></div>
-          ${scales ? `
-            <p class="muted small">${scales.info?.connected ? `${t("scale.connected")}: <b>${scales.info.name || scales.info.uuid}</b>${scales.info.battery != null ? ` · ${scales.info.battery} %` : ""}` : t("scale.none")}</p>
-            <div class="list" style="margin-top:10px">${(scales.candidates || []).map((c) => `
-              <div class="row spread" style="padding:6px 0;border-top:1px solid var(--line)">
-                <span><b>${c.name || "?"}</b> <span class="faint small num">${c.uuid} · ${c.rssi} dBm</span></span>
-                <button class="btn sm" data-scale="${c.uuid}" ${scales.info?.uuid === c.uuid && scales.info?.connected ? "disabled" : ""}>${t("scale.connect")}</button>
-              </div>`).join("") || `<p class="faint small">${t("scale.no_candidates")}</p>`}</div>
-          ` : `<p class="muted">${t("profiles.unreachable")}</p>`}
-        </section>
+      <div class="cols">
+        <div class="col">
         <section class="card">
           <div class="card-head"><h2>${t("printer.title")}</h2>${ps?.mac ? `<button class="btn sm ghost" id="printer-test">${t("printer.test")}</button>` : ""}</div>
           ${printer ? `
@@ -50,10 +39,7 @@ export async function renderSettings(view) {
             </div>
           ` : `<p class="muted">${t("printer.unavailable")}</p>`}
         </section>
-      </div>
-      ${rc ? `
-      <div class="grid cols-2">
-        <section class="card">
+        ${rc ? `<section class="card">
           <div class="card-head"><h2>${t("receipt.title")}</h2></div>
           <div class="form">
             <div class="grid cols-2">
@@ -69,12 +55,15 @@ export async function renderSettings(view) {
             </div>
             <div class="row"><button class="btn primary sm" id="rc-save">${t("printer.save")}</button></div>
           </div>
-        </section>
-        <section class="card">
+        </section>` : ""}
+        </div>
+        <div class="col">
+        ${rc ? `<section class="card">
           <div class="card-head"><h2>${t("receipt.preview")}</h2>${lastId ? `<a class="btn sm ghost" href="api/shots/${lastId}/receipt.png" target="_blank" rel="noopener">PNG</a>` : ""}</div>
           ${lastId ? `<img id="rc-preview" class="receipt-preview" src="api/shots/${lastId}/receipt.png?ts=${Date.now()}" alt="">` : `<p class="empty">${t("now.none")}</p>`}
-        </section>
-      </div>` : ""}
+        </section>` : ""}
+        </div>
+      </div>
       <section class="card">
         <div class="card-head"><h2>${t("transfer.title")}</h2><a class="btn sm ghost" href="api/export">${t("transfer.export")}</a></div>
         <p class="muted small" style="max-width:70ch">${t("transfer.hint")}</p>
@@ -91,13 +80,6 @@ export async function renderSettings(view) {
         setTimeout(() => location.reload(), 1200);
       } catch (err) { toast(t("transfer.failed") + " " + err.message, "bad"); button.disabled = false; }
     });
-    view.querySelector("#scale-scan")?.addEventListener("click", async () => {
-      try { await api.scanScales(); toast(t("scale.scanning")); setTimeout(load, 6000); } catch (err) { toast(String(err.message), "bad"); }
-    });
-    view.querySelectorAll("[data-scale]").forEach((b) => (b.onclick = async () => {
-      b.disabled = true;
-      try { await api.connectScale(b.dataset.scale); toast(t("scale.connecting")); setTimeout(load, 4000); } catch (err) { toast(String(err.message), "bad"); b.disabled = false; }
-    }));
     view.querySelector("#printer-scan")?.addEventListener("click", async (e) => {
       const button = e.currentTarget; button.disabled = true; button.textContent = t("printer.scanning");
       try {

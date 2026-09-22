@@ -118,6 +118,11 @@ p { margin: 0; }
 .pill.accent { color: var(--accent-2); border-color: color-mix(in oklab, var(--accent) 40%, transparent); }
 
 /* ---- hero (Now) ---- */
+/* Two independent columns: each stacks its cards, so a short card next to a
+   tall one leaves no hole in the middle of the page. */
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.cols > .col { display: grid; gap: 14px; align-content: start; min-width: 0; }
+@media (max-width: 720px) { .cols { grid-template-columns: 1fr; } }
 .hero { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; }
 @media (max-width: 720px) { .hero { grid-template-columns: 1fr; } }
 .big { font-size: clamp(3.2rem, 9vw, 5rem); line-height: 1; font-weight: 600; letter-spacing: -0.04em; }
