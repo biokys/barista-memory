@@ -1,0 +1,165 @@
+import dbus, { Variant, type ProxyObject, type ClientInterface } from "dbus-next";
+
+/**
+ * Just enough BlueZ over the system D-Bus to scan for and talk to a BLE
+ * peripheral: no native module, which keeps the image buildable for arm64,
+ * and the same API the machine's own tooling (bleak) uses underneath. Needs
+ * the host's D-Bus socket in the container (/run/dbus) and a BlueZ adapter.
+ */
+
+const BLUEZ = "org.bluez";
+const CONNECT_ATTEMPTS = 3;
+const CONNECT_TIMEOUT_MS = 20000;
+const RESOLVE_TIMEOUT_MS = 15000;
+
+export interface FoundDevice {
+  address: string;
+  name: string | null;
+  rssi: number | null;
+  /** Looks like a cat printer of the MXW01 family, by name. */
+  printer_like: boolean;
+}
+
+type ManagedObjects = Record<string, Record<string, Record<string, Variant>>>;
+
+let bus: ReturnType<typeof dbus.systemBus> | null = null;
+function systemBus() {
+  if (!bus) bus = dbus.systemBus();
+  return bus;
+}
+
+async function managedObjects(): Promise<ManagedObjects> {
+  const root = await systemBus().getProxyObject(BLUEZ, "/");
+  const om = root.getInterface("org.freedesktop.DBus.ObjectManager");
+  return (await om.GetManagedObjects()) as ManagedObjects;
+}
+
+async function adapterPath(): Promise<string> {
+  const objects = await managedObjects();
+  const path = Object.keys(objects).find((p) => objects[p]["org.bluez.Adapter1"]);
+  if (!path) throw new Error("No Bluetooth adapter: is BlueZ running and /run/dbus mounted?");
+  return path;
+}
+
+export async function bluetoothAvailable(): Promise<boolean> {
+  try { await adapterPath(); return true; } catch { return false; }
+}
+
+const PRINTER_NAME = /mxw01|mx[0-9]{2}|gb0[1-3]|gt01|catprint|print/i;
+
+function deviceFrom(path: string, props: Record<string, Variant>): FoundDevice {
+  const name = (props.Name?.value ?? props.Alias?.value ?? null) as string | null;
+  return {
+    address: String(props.Address?.value ?? path.split("dev_")[1]?.replace(/_/g, ":") ?? ""),
+    name,
+    rssi: (props.RSSI?.value as number | undefined) ?? null,
+    printer_like: !!name && PRINTER_NAME.test(name),
+  };
+}
+
+/** Scan for `seconds`, then list every device BlueZ knows about, strongest first. */
+export async function scan(seconds = 8): Promise<FoundDevice[]> {
+  const path = await adapterPath();
+  const obj = await systemBus().getProxyObject(BLUEZ, path);
+  const adapter = obj.getInterface("org.bluez.Adapter1");
+  const props = obj.getInterface("org.freedesktop.DBus.Properties");
+  const powered = (await props.Get("org.bluez.Adapter1", "Powered")) as Variant;
+  if (!powered.value) await props.Set("org.bluez.Adapter1", "Powered", new Variant("b", true));
+  try { await adapter.SetDiscoveryFilter({ Transport: new Variant("s", "le") }); } catch { /* older BlueZ */ }
+  try { await adapter.StartDiscovery(); } catch (error) { if (!String(error).includes("InProgress")) throw error; }
+  await new Promise((r) => setTimeout(r, seconds * 1000));
+  try { await adapter.StopDiscovery(); } catch { /* fine */ }
+  const objects = await managedObjects();
+  return Object.entries(objects)
+    .filter(([p, ifaces]) => p.startsWith(path + "/dev_") && ifaces["org.bluez.Device1"])
+    .map(([p, ifaces]) => deviceFrom(p, ifaces["org.bluez.Device1"]))
+    .sort((a, b) => (b.rssi ?? -999) - (a.rssi ?? -999));
+}
+
+export interface Characteristic {
+  write(data: Uint8Array, withResponse: boolean): Promise<void>;
+  notify(handler: (data: Uint8Array) => void): Promise<void>;
+}
+
+export interface Connection {
+  characteristic(uuid: string): Promise<Characteristic>;
+  disconnect(): Promise<void>;
+}
+
+function devicePath(adapter: string, address: string): string {
+  return `${adapter}/dev_${address.toUpperCase().replace(/:/g, "_")}`;
+}
+
+/**
+ * Connect to a device by address. BlueZ often fails the first attempt and
+ * only knows a device it has seen, so a miss triggers a short scan first.
+ */
+export async function connect(address: string): Promise<Connection> {
+  const adapter = await adapterPath();
+  const path = devicePath(adapter, address);
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= CONNECT_ATTEMPTS; attempt++) {
+    try {
+      const objects = await managedObjects();
+      if (!objects[path]) await scan(6);
+      const obj = await systemBus().getProxyObject(BLUEZ, path);
+      const device = obj.getInterface("org.bluez.Device1");
+      const props = obj.getInterface("org.freedesktop.DBus.Properties");
+      await withTimeout(device.Connect(), CONNECT_TIMEOUT_MS, "connect");
+      await waitForProperty(props, "org.bluez.Device1", "ServicesResolved", true, RESOLVE_TIMEOUT_MS);
+      return connection(path, obj);
+    } catch (error) {
+      lastError = error;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+  throw new Error(`could not connect to ${address}: ${lastError instanceof Error ? lastError.message : lastError}`);
+}
+
+function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`${what} timed out after ${ms} ms`)), ms);
+    p.then((v) => { clearTimeout(t); resolve(v); }, (e) => { clearTimeout(t); reject(e); });
+  });
+}
+
+async function waitForProperty(props: ClientInterface, iface: string, name: string, wanted: unknown, ms: number): Promise<void> {
+  const current = (await props.Get(iface, name)) as Variant;
+  if (current.value === wanted) return;
+  await new Promise<void>((resolve, reject) => {
+    const t = setTimeout(() => { props.removeListener("PropertiesChanged", on); reject(new Error(`${name} did not become ${wanted} within ${ms} ms`)); }, ms);
+    const on = (i: string, changed: Record<string, Variant>) => {
+      if (i === iface && changed[name]?.value === wanted) { clearTimeout(t); props.removeListener("PropertiesChanged", on); resolve(); }
+    };
+    props.on("PropertiesChanged", on);
+  });
+}
+
+function connection(path: string, deviceObj: ProxyObject): Connection {
+  return {
+    async characteristic(uuid) {
+      const objects = await managedObjects();
+      const charPath = Object.keys(objects).find(
+        (p) => p.startsWith(path + "/") && objects[p]["org.bluez.GattCharacteristic1"]?.UUID?.value === uuid
+      );
+      if (!charPath) throw new Error(`characteristic ${uuid} not found on ${path}`);
+      const obj = await systemBus().getProxyObject(BLUEZ, charPath);
+      const ch = obj.getInterface("org.bluez.GattCharacteristic1");
+      const props = obj.getInterface("org.freedesktop.DBus.Properties");
+      return {
+        async write(data, withResponse) {
+          await ch.WriteValue(Array.from(data), { type: new Variant("s", withResponse ? "request" : "command") });
+        },
+        async notify(handler) {
+          props.on("PropertiesChanged", (iface: string, changed: Record<string, Variant>) => {
+            if (iface === "org.bluez.GattCharacteristic1" && changed.Value) handler(Uint8Array.from(changed.Value.value as number[]));
+          });
+          await ch.StartNotify();
+        },
+      };
+    },
+    async disconnect() {
+      try { await deviceObj.getInterface("org.bluez.Device1").Disconnect(); } catch { /* already gone */ }
+    },
+  };
+}

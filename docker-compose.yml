@@ -10,6 +10,8 @@ services:
       - "8080:8080"
     volumes:
       - barista-memory:/data
+      # Only for the Bluetooth receipt printer: the host's BlueZ over D-Bus.
+      - /run/dbus:/run/dbus:ro
     environment:
       # IP of the GaggiMate. An IP, not gaggimate.local: a container cannot
       # resolve mDNS names unless it shares the host's network.

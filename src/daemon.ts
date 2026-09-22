@@ -6,6 +6,7 @@ import { recordState } from "./machineState.js";
 import { startStatusStream } from "./device/statusStream.js";
 import { createFlushWatcher } from "./flushWatch.js";
 import { startMqtt, type MqttBridge } from "./mqtt.js";
+import { printShot, printerSettings } from "./printer/index.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -64,8 +65,10 @@ async function main(): Promise<void> {
       console.error(`state sample failed: ${error instanceof Error ? error.message : error}`);
     }
 
+    let newCoffees: number[] = [];
     try {
       const result = await ingestOnce(db);
+      newCoffees = result.newCoffeeIds;
       if (result.archived > 0 || result.notesSynced > 0 || result.failures.length > 0) {
         console.log(
           `archived=${result.archived} notes=${result.notesSynced} ` +
@@ -81,6 +84,15 @@ async function main(): Promise<void> {
 
     // After the pass, so a shot archived just now is already the "last shot".
     try { mqttBridge?.publish(db, live); } catch (error) { console.error(`mqtt publish failed: ${error instanceof Error ? error.message : error}`); }
+
+    // A receipt for every new coffee, when the printer is set up for it.
+    // Flushes are not coffees and get none.
+    if (newCoffees.length && printerSettings(db).print_each_shot) {
+      for (const id of newCoffees) {
+        const result = await printShot(db, id);
+        console.log(result.ok ? `printed receipt for shot ${id}` : `receipt for shot ${id} not printed: ${result.message}`);
+      }
+    }
 
     await new Promise((resolve) => setTimeout(resolve, config.pollIntervalS * 1000));
   }

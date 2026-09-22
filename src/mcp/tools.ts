@@ -6,6 +6,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { currentSetup, type ShotContextRow } from "../db/db.js";
 import { listProfiles, getProfile, fetchRawSettings } from "../device/client.js";
 import { liveStatus } from "../liveStatus.js";
+import { printShot, printerStatus } from "../printer/index.js";
 import { loadArchivedShot } from "../shots.js";
 import { saveProfileMerged, selectProfileOnMachine } from "../profiles.js";
 import { recordEvent, listEvents, eraOf, EVENT_KINDS } from "../events.js";
@@ -228,6 +229,16 @@ const TOOLS: Tool[] = [
         group: { type: "string", description: "One of: temperature, pressure, pump, timing, hardware, behavior, warnings (optional)" },
       },
     },
+  },
+  {
+    name: "print_receipt",
+    description: "Print a receipt for a shot on the Bluetooth thermal printer (facts, curve, rating). Defaults to the latest coffee.",
+    inputSchema: { type: "object", properties: { shot_id: { type: "number" } } },
+  },
+  {
+    name: "printer_status",
+    description: "Battery, temperature and readiness of the receipt printer, if one is configured.",
+    inputSchema: { type: "object", properties: {} },
   },
   {
     name: "select_profile",
@@ -497,6 +508,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           note: grouped.note,
           source: config.deviceHost,
         });
+      }
+
+      case "print_receipt": {
+        const id = args?.shot_id != null ? Number(args.shot_id) : (db.prepare("SELECT id FROM shot_context ORDER BY started_at DESC LIMIT 1").get() as { id: number } | undefined)?.id;
+        if (id == null) return fail("No shot to print", "NO_SHOT");
+        const result = await printShot(db, id);
+        return result.ok ? ok({ shot_id: id, ...result }) : fail(result.message, result.code);
+      }
+
+      case "printer_status": {
+        const result = await printerStatus(db);
+        return result.ok ? ok(result) : fail(result.message, result.code);
       }
 
       case "select_profile": {

@@ -5,6 +5,7 @@ import type { MachineStatus } from "./device/client.js";
 import { currentConditions } from "./machineState.js";
 import { maintenanceStatus } from "./maintenance.js";
 import { changeMode, SWITCHABLE_MODES } from "./machineControl.js";
+import { printShot, printerSettings } from "./printer/index.js";
 import type { ShotContextRow } from "./db/db.js";
 
 /**
@@ -40,6 +41,7 @@ export function startMqtt(db: DatabaseSync, version: string, log: (line: string)
   const stateTopic = `${prefix}/state`;
   const availabilityTopic = `${prefix}/availability`;
   const modeCommandTopic = `${prefix}/cmd/mode`;
+  const printCommandTopic = `${prefix}/cmd/print`;
   let ready = false;
   let latest: { db: DatabaseSync; live: MachineStatus | null } | null = null;
 
@@ -111,6 +113,9 @@ export function startMqtt(db: DatabaseSync, version: string, log: (line: string)
       value_template: "{{ value_json.mode if value_json.mode in ['standby','brew','steam','water'] else 'None' }}",
       ...liveAvailability,
     }),
+    entity("button", "print_last", {
+      name: "Print last shot", icon: "mdi:printer-pos", command_topic: printCommandTopic, payload_press: "last", ...alwaysAvailability,
+    }),
     entity("sensor", "heating_for", {
       name: "Heating for", device_class: "duration", unit_of_measurement: "s", icon: "mdi:timer-outline",
       value_template: "{{ value_json.heating_for_s if value_json.heating_for_s is not none else 'unknown' }}", ...liveAvailability,
@@ -135,12 +140,21 @@ export function startMqtt(db: DatabaseSync, version: string, log: (line: string)
     log(`mqtt: connected to ${config.mqttUrl}`);
     for (const d of discovery) client.publish(d.topic, JSON.stringify(d.payload), { retain: true });
     client.publish(availabilityTopic, "online", { retain: true });
-    client.subscribe(modeCommandTopic);
+    client.subscribe([modeCommandTopic, printCommandTopic]);
     if (latest) publishState(latest.db, latest.live);
   });
   client.on("error", (error) => log(`mqtt: ${error.message}`));
 
   client.on("message", async (topic, payload) => {
+    if (topic === printCommandTopic && latest) {
+      const text = payload.toString().trim();
+      const id = /^\d+$/.test(text) ? Number(text)
+        : (latest.db.prepare("SELECT id FROM shot_context ORDER BY started_at DESC LIMIT 1").get() as { id: number } | undefined)?.id;
+      if (id == null) return;
+      const result = await printShot(latest.db, id);
+      log(result.ok ? `mqtt: printed shot ${id}` : `mqtt: print of shot ${id} failed: ${result.message}`);
+      return;
+    }
     if (topic !== modeCommandTopic) return;
     const mode = payload.toString().trim();
     const result = await changeMode(mode);
@@ -178,8 +192,10 @@ export function startMqtt(db: DatabaseSync, version: string, log: (line: string)
             grind: last.grind_setting, dose_g: last.dose_g, weight_g: last.stable_weight_g, ratio: last.ratio,
             duration_s: last.duration_ms != null ? Math.round(last.duration_ms / 100) / 10 : null, rating: last.rating,
             machine_settledness: last.machine_settledness,
+            receipt_url: config.webUrl ? `${config.webUrl}/api/shots/${last.id}/receipt.png` : null,
           }
         : null,
+      printer: { configured: printerSettings(dbNow).mac !== "", print_each_shot: printerSettings(dbNow).print_each_shot },
       maintenance: {
         due: maint.some((m) => m.state === "due"),
         soon: maint.some((m) => m.state === "soon"),

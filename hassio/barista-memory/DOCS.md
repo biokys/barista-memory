@@ -41,6 +41,18 @@ A notification when the machine is ready is then one automation: trigger on
 
 Another broker can be set under Configuration instead.
 
+## Receipt printer
+
+A Bluetooth thermal printer of the MXW01 family ("cat printer") can print a
+receipt after every coffee: facts, the pressure and flow curve, rating, a
+greeting and a QR code to the shot. The add-on reaches it through the host's
+Bluetooth (BlueZ), so the Home Assistant machine needs a Bluetooth adapter
+in range of the printer.
+
+On the **Machine** page of the web UI, scan for the printer, pick it, run a
+test print and switch on "print every shot". A **Print last shot** button
+entity appears in Home Assistant as well, for automations.
+
 ## AI assistants (MCP)
 
 The archive can be a tool for Claude Code, Claude Desktop and other MCP

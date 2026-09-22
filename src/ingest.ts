@@ -94,6 +94,8 @@ export interface IngestResult {
   skipped: number;
   notesSynced: number;
   classified: number;
+  /** Ids archived in this pass that turned out to be coffees, not flushes. */
+  newCoffeeIds: number[];
   failures: Array<{ shotId: number; reason: string }>;
 }
 
@@ -120,6 +122,7 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
     skipped: 0,
     notesSynced: 0,
     classified: 0,
+    newCoffeeIds: [],
     failures: [],
   };
 
@@ -195,6 +198,10 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
   if (sawNew || db.prepare("SELECT 1 FROM shots WHERE water_ml IS NULL LIMIT 1").get()) {
     const utility = await utilityProfileIds();
     result.classified = classifyShots(db, utility, (slog, id) => parseSlog(slog, id).samples);
+  }
+  if (fresh.length) {
+    const coffees = db.prepare(`SELECT id FROM shots WHERE kind = 'shot' AND id IN (SELECT value FROM json_each(?))`).all(JSON.stringify(fresh)) as Array<{ id: number }>;
+    result.newCoffeeIds = coffees.map((r) => r.id);
   }
 
   if (config.syncNotesToDevice) {

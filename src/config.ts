@@ -32,6 +32,12 @@ export const config = {
   haDiscoveryPrefix: process.env.GAGGIMATE_HA_DISCOVERY ?? "homeassistant",
   /** Bearer token for MCP over HTTP at /mcp on the web port; unset = endpoint off. */
   mcpToken: process.env.GAGGIMATE_MCP_TOKEN ?? "",
+  /** Language of printed receipts: "cs" or "en". */
+  lang: process.env.GAGGIMATE_LANG === "cs" ? "cs" : "en",
+  /** Public base URL of the web UI, for the QR code on receipts; unset = no QR. */
+  webUrl: (process.env.GAGGIMATE_WEB_URL ?? "").replace(/\/$/, ""),
+  /** Bluetooth address of the receipt printer (MXW01 class). Settings in the DB override. */
+  printerMac: process.env.GAGGIMATE_PRINTER_MAC ?? "",
   /** Warm-up percent at which the "ready" sensor turns on. */
   readyPct: Number(process.env.GAGGIMATE_READY_PCT ?? 85),
 } as const;

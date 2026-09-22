@@ -27,6 +27,8 @@ export async function renderShot(view, [id]) {
         <p class="muted">${fmt.dateLong(c.started_at)} · ${fmt.time(c.started_at)} · ${c.profile_name ?? ""}</p>
       </div>
       <div class="row">
+        <a class="btn sm ghost" href="api/shots/${c.id}/receipt.png" target="_blank" rel="noopener">${t("shot.receipt")}</a>
+        <button class="btn sm ghost" id="print">${t("shot.print")}</button>
         ${data.prev_id ? `<a class="btn sm ghost" href="#/shots/${data.prev_id}">← ${t("shot.prev")}</a>` : ""}
         ${data.next_id ? `<a class="btn sm ghost" href="#/shots/${data.next_id}">${t("shot.next")} →</a>` : ""}
       </div>
@@ -83,6 +85,11 @@ export async function renderShot(view, [id]) {
 
   // Comparison candidates: same bean if any, else the neighbours.
   const list = await api.shots({ limit: 40, ...(c.bean ? { bean: c.bean } : {}) });
+  view.querySelector("#print").onclick = async (e) => {
+    const button = e.currentTarget; button.disabled = true;
+    try { const r = await api.printShot(c.id); toast(r.completed ? t("printer.printed") : t("printer.printed_unconfirmed")); } catch (err) { toast(t("printer.failed") + " " + err.message, "bad"); }
+    button.disabled = false;
+  };
   const sel = view.querySelector("#cmp");
   for (const s of list.shots) if (s.id !== c.id) sel.insertAdjacentHTML("beforeend", `<option value="${s.id}">#${s.id} · ${fmt.date(s.started_at)} · ${fmt.ratio(s.ratio)}</option>`);
   sel.onchange = async () => {

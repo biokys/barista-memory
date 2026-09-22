@@ -7,7 +7,10 @@ import { extname, join, normalize, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "../config.js";
 import { openDatabase, currentSetup, type ShotContextRow } from "../db/db.js";
-import { listProfiles, getProfile, fetchRawSettings } from "../device/client.js";
+import { listProfiles, getProfile, fetchRawSettings, scaleInfo, scaleList, scaleScan, scaleConnect } from "../device/client.js";
+import { renderShotReceipt } from "../receipt.js";
+import { printShot, printTest, printerStatus, printerSettings, updatePrinterSettings, findPrinters } from "../printer/index.js";
+import { bluetoothAvailable } from "../printer/bluez.js";
 import { liveStatus, machineReachable } from "../liveStatus.js";
 import { groupSettings } from "../device/machineSettings.js";
 import { currentConditions, powerSessions, allStateSamples, type StateRow } from "../machineState.js";
@@ -113,6 +116,13 @@ function route(method: string, path: string, handler: Handler): void {
   routes.push({ method, pattern, keys, handler });
 }
 
+/** Routes that need the machine answer at once while it is known to be off. */
+async function requireMachine(res: ServerResponse): Promise<boolean> {
+  if (await machineReachable()) return true;
+  json(res, 502, { error: "MACHINE_OFF", message: "The machine is not answering" });
+  return false;
+}
+
 route("GET", "/api/version", async (_req, res) => {
   json(res, 200, VERSION);
 });
@@ -156,6 +166,67 @@ route("GET", "/api/shots", async (_req, res, _p, url) => {
     beans: db.prepare("SELECT DISTINCT bean FROM shot_context WHERE bean IS NOT NULL ORDER BY bean").all().map((r: any) => r.bean),
     profiles: db.prepare("SELECT DISTINCT profile_name FROM shot_context WHERE profile_name IS NOT NULL").all().map((r: any) => r.profile_name),
   });
+});
+
+route("GET", "/api/shots/:id/receipt.png", async (_req, res, p) => {
+  const receipt = await renderShotReceipt(db, Number(p.id));
+  if (!receipt) return json(res, 404, { error: "SHOT_NOT_FOUND" });
+  res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-cache" });
+  res.end(Buffer.from(receipt.png));
+});
+
+route("GET", "/api/shots/:id/receipt.svg", async (_req, res, p) => {
+  const receipt = await renderShotReceipt(db, Number(p.id));
+  if (!receipt) return json(res, 404, { error: "SHOT_NOT_FOUND" });
+  res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "no-cache" });
+  res.end(receipt.svg);
+});
+
+route("POST", "/api/shots/:id/print", async (_req, res, p) => {
+  const result = await printShot(db, Number(p.id));
+  json(res, result.ok ? 200 : result.code === "NOT_FOUND" ? 404 : 502, result);
+});
+
+route("GET", "/api/printer", async (_req, res) => {
+  json(res, 200, { settings: printerSettings(db), bluetooth: await bluetoothAvailable() });
+});
+
+route("PATCH", "/api/printer", async (req, res) => {
+  const body = await readJson(req);
+  json(res, 200, { settings: updatePrinterSettings(db, body) });
+});
+
+route("POST", "/api/printer/scan", async (_req, res) => {
+  json(res, 200, await findPrinters());
+});
+
+route("POST", "/api/printer/test", async (_req, res) => {
+  const result = await printTest(db);
+  json(res, result.ok ? 200 : 502, result);
+});
+
+route("GET", "/api/printer/status", async (_req, res) => {
+  const result = await printerStatus(db);
+  json(res, result.ok ? 200 : 502, result);
+});
+
+// The scale belongs to the machine; these just relay its own endpoints.
+route("GET", "/api/scales", async (_req, res) => {
+  if (!(await requireMachine(res))) return;
+  json(res, 200, { info: await scaleInfo(), candidates: (await scaleList()) ?? [] });
+});
+
+route("POST", "/api/scales/scan", async (_req, res) => {
+  if (!(await requireMachine(res))) return;
+  const started = await scaleScan();
+  json(res, started ? 200 : 502, { started: !!started });
+});
+
+route("POST", "/api/scales/connect", async (req, res) => {
+  if (!(await requireMachine(res))) return;
+  const body = await readJson(req);
+  const done = await scaleConnect(String(body.uuid ?? ""));
+  json(res, done ? 200 : 502, { connected: !!done?.success });
 });
 
 route("GET", "/api/shots/:id", async (_req, res, p) => {
@@ -297,13 +368,6 @@ route("POST", "/api/machine/mode", async (req, res) => {
   if (!result.ok) return json(res, result.code === "INVALID_MODE" ? 400 : 502, { error: result.code, message: result.message });
   json(res, 200, { ...result, modes: SWITCHABLE_MODES });
 });
-
-/** Routes that need the machine answer at once while it is known to be off. */
-async function requireMachine(res: ServerResponse): Promise<boolean> {
-  if (await machineReachable()) return true;
-  json(res, 502, { error: "MACHINE_OFF", message: "The machine is not answering" });
-  return false;
-}
 
 route("GET", "/api/machine/settings", async (_req, res) => {
   if (!(await requireMachine(res))) return;

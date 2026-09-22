@@ -88,6 +88,13 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS events_at ON events (at);
 
+-- Small key/value settings changed from the UI (printer address, auto-print).
+-- Environment variables are the defaults; a row here wins.
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 -- Routines the machine needs and how often. Each is worn down by something
 -- different — flushes and Cafiza by coffee (shots), descaling by water
 -- (litres), a gasket by time — so a type carries whichever intervals apply and

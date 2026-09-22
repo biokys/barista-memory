@@ -130,6 +130,19 @@ the last shot with its context as attributes, and whether maintenance is due.
 add-on takes the Mosquitto add-on's credentials from the Supervisor, so
 there nothing needs configuring.
 
+### Receipt printer
+
+A Bluetooth thermal printer of the MXW01 family ("cat printer", 384 dots
+wide) prints a receipt after every coffee: the facts, the pressure and flow
+curve with phases, the rating, a greeting and a QR code to the shot. The
+receipt is rendered by the archive (`GET /api/shots/:id/receipt.png`, SVG
+rasterised in WebAssembly, no native modules) and sent over BlueZ via D-Bus,
+so it works from the container and the add-on alike — mount `/run/dbus`
+(see `docker-compose.yml`) on a host with Bluetooth. Scan for the printer on
+the Machine page, test, switch on "print every shot". `cli print [id]`,
+`cli printer-test`, the `print_receipt` MCP tool and a Home Assistant button
+entity do the same.
+
 ### The web UI
 
 The container serves the web UI on port 8080; from source it is `npm run web`
@@ -369,5 +382,8 @@ transition must not reset the description or the selected flag.
 | `GAGGIMATE_MQTT_PREFIX` | `barista-memory` | Topic prefix and Home Assistant device id. |
 | `GAGGIMATE_HA_DISCOVERY` | `homeassistant` | Home Assistant's MQTT discovery prefix. |
 | `GAGGIMATE_READY_PCT` | `85` | Warm-up percent at which *Machine ready* turns on. |
+| `GAGGIMATE_PRINTER_MAC` | unset | Bluetooth address of the receipt printer (the UI can override it). |
+| `GAGGIMATE_LANG` | `en` | Receipt language, `cs` or `en`. |
+| `GAGGIMATE_WEB_URL` | unset | Public base URL of the web UI; receipts then carry a QR code to the shot. |
 | `GAGGIMATE_TAU_HEAT_MIN` | `20` | Thermal model: minutes for the group to warm; tune with `cli calibrate`. |
 | `GAGGIMATE_ROOM_TEMP_C` | `22` | Thermal model: where a cold machine starts. |

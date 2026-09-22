@@ -15,6 +15,7 @@ import { TAU_HEAT_MIN } from "./thermalModel.js";
 import { recordEvent, listEvents } from "./events.js";
 import { maintenanceStatus, logMaintenance } from "./maintenance.js";
 import { changeMode } from "./machineControl.js";
+import { printShot, printTest, printerStatus, findPrinters } from "./printer/index.js";
 import { currentConditions } from "./machineState.js";
 
 function parseArgs(argv: string[]): Record<string, string> {
@@ -46,6 +47,8 @@ function usage(): never {
       "  cli show          Print the context currently in force",
       "  cli status        One line on the machine: temperature, mode, how long on",
       "  cli mode <standby|brew|steam|water>   Switch the machine's mode",
+      "  cli print [id]    Print a receipt for a shot (default: the latest) on the Bluetooth printer",
+      "  cli printer-test | printer-status | printer-scan",
       "  cli last          One line on the most recent archived shot",
       "  cli ingest        Run one archive pass",
       "  cli event --title T [--kind equipment|technique|maintenance|beans|other] [--note N] [--at UNIX]",
@@ -146,6 +149,37 @@ try {
       console.log(
         `setup #${setup.id}: ${setup.bean ?? "?"} | grind ${setup.grind_setting ?? "?"} | dose ${setup.dose_g ?? "?"} g`
       );
+      break;
+    }
+
+    case "print": {
+      const arg = rest.find((a) => !a.startsWith("--"));
+      const id = arg ? Number(arg) : (db.prepare("SELECT id FROM shot_context ORDER BY started_at DESC LIMIT 1").get() as { id: number } | undefined)?.id;
+      if (id == null) { console.error("nothing to print"); process.exitCode = 1; break; }
+      const result = await printShot(db, id);
+      if (!result.ok) { console.error(`${result.code}: ${result.message}`); process.exitCode = 1; break; }
+      console.log(`printed shot ${id}: ${result.lines} lines${result.completed ? "" : " (completion not confirmed)"}`);
+      break;
+    }
+
+    case "printer-test": {
+      const result = await printTest(db);
+      console.log(result.ok ? `test strip printed (${result.lines} lines)` : `${result.code}: ${result.message}`);
+      if (!result.ok) process.exitCode = 1;
+      break;
+    }
+
+    case "printer-status": {
+      const result = await printerStatus(db);
+      console.log(result.ok ? JSON.stringify(result.status) : `${result.code}: ${result.message}`);
+      if (!result.ok) process.exitCode = 1;
+      break;
+    }
+
+    case "printer-scan": {
+      const found = await findPrinters();
+      if (!found.bluetooth) { console.error("no Bluetooth adapter"); process.exitCode = 1; break; }
+      for (const d of found.devices) console.log(`  ${d.address}  ${String(d.rssi ?? "").padStart(4)}  ${d.name ?? ""}${d.printer_like ? "  <- printer?" : ""}`);
       break;
     }
 
