@@ -58,6 +58,39 @@ export interface StableWeight {
   rejected: number;
 }
 
+/**
+ * The weight trace with the same readings removed that stableWeight() ignores,
+ * as one value per input sample: null before the self-tare and for every
+ * reading rejected as impossible, so a chart shows a gap there instead of the
+ * 181.9 g pre-tare spike or the cup being lifted off the scale at the end.
+ */
+export function cleanWeightSeries(samples: ShotSample[]): Array<number | null> {
+  const out: Array<number | null> = samples.map(() => null);
+  const points = samples.map((sample, i) => ({
+    i,
+    t: typeof sample.t === "number" ? sample.t / 1000 : null,
+    v: typeof sample.v === "number" ? sample.v : null,
+  }));
+  if (points.every((p) => p.v == null || p.v === 0)) return out;
+
+  let start = 0;
+  for (const p of points) {
+    if (p.t != null && p.v != null && p.t <= TARE_WINDOW_S && p.v <= TARE_THRESHOLD_G) start = p.i;
+  }
+
+  let last: { t: number; v: number } | null = null;
+  for (const p of points.slice(start)) {
+    if (p.t == null || p.v == null) continue;
+    if (!last) { last = { t: p.t, v: p.v }; out[p.i] = p.v; continue; }
+    const seconds = Math.max(p.t - last.t, 1e-3);
+    const rate = (p.v - last.v) / seconds;
+    if (rate > MAX_PLAUSIBLE_RATE_G_S || p.v < last.v - MAX_BACKWARD_DROP_G) continue;
+    last = { t: p.t, v: p.v };
+    out[p.i] = p.v;
+  }
+  return out;
+}
+
 /** The end of the curve, with tare and impossible readings removed. */
 function weightFromCurve(samples: ShotSample[]): { weight: number | null; rejected: number } {
   const points = samples

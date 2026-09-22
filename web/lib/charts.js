@@ -66,14 +66,16 @@ export function shotChart(container, shot, compare = null, { stableWeight = null
     pts.map((p) => p.pressure_bar),
     pts.map((p) => p.flow_ml_s),
     pts.map((p) => p.temperature_c),
-    pts.map((p) => p.weight_g),
+    // Cleaned weight: null before the self-tare and where the scale glitched,
+    // so the green line neither starts at 180 g nor dives when the cup is lifted.
+    pts.map((p) => (p.weight_clean_g === undefined ? p.weight_g : p.weight_clean_g)),
   ];
   const series = [
     {},
     { label: "bar", stroke: c.pressure, width: 2, scale: "y", value: (u, v) => (v == null ? "" : v.toFixed(1)) },
     { label: "ml/s", stroke: c.flow, width: 1.5, dash: [5, 4], scale: "y", value: (u, v) => (v == null ? "" : v.toFixed(2)) },
     { label: "°C", stroke: c.temp, width: 1.5, scale: "t", value: (u, v) => (v == null ? "" : v.toFixed(1)) },
-    { label: "g", stroke: c.weight, width: 1.5, scale: "w", value: (u, v) => (v == null ? "" : v.toFixed(1)) },
+    { label: "g", stroke: c.weight, width: 1.5, scale: "w", spanGaps: true, value: (u, v) => (v == null ? "" : v.toFixed(1)) },
   ];
   if (compare?.full_curve) {
     // Comparison is resampled onto this shot's time axis by nearest neighbour.
@@ -97,7 +99,7 @@ export function shotChart(container, shot, compare = null, { stableWeight = null
     width: container.clientWidth, height: 300,
     cursor: { drag: { x: true, y: false } },
     legend: { show: false },
-    scales: { x: { time: false }, y: { range: [0, 12] }, t: { range: (u, min, max) => [Math.floor(Math.min(min, 88) - 1), Math.ceil(Math.max(max, 96) + 1)] }, w: { range: [0, Math.max(50, ...data[4]) * 1.05] } },
+    scales: { x: { time: false }, y: { range: [0, 12] }, t: { range: (u, min, max) => [Math.floor(Math.min(min, 88) - 1), Math.ceil(Math.max(max, 96) + 1)] }, w: { range: [0, Math.max(50, ...data[4].filter((v) => v != null)) * 1.05] } },
     axes: [
       axis({ scale: "x", values: (u, v) => v.map((n) => n + " s") }),
       axis({ scale: "y", side: 3, values: (u, v) => v.map((n) => n) }),

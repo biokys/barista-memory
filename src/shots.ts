@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { ShotContextRow } from "./db/db.js";
 import { parseSlog } from "./device/client.js";
 import { transformShotForAI } from "./device/shotTransformer.js";
+import { cleanWeightSeries } from "./stableWeight.js";
 
 /** The machine's thermal context for a shot, or null when the record started after it. */
 export function machineContextOf(context: ShotContextRow) {
@@ -30,7 +31,17 @@ export function loadArchivedShot(db: DatabaseSync, shotId: number, fullCurve: bo
   const row = db.prepare("SELECT raw_slog FROM shots WHERE id = ?").get(shotId) as
     | { raw_slog: Uint8Array | null }
     | undefined;
-  const shot = row?.raw_slog ? transformShotForAI(parseSlog(Buffer.from(row.raw_slog), shotId), fullCurve) : null;
+  let shot: any = null;
+  if (row?.raw_slog) {
+    const parsed = parseSlog(Buffer.from(row.raw_slog), shotId);
+    shot = transformShotForAI(parsed, fullCurve);
+    // One cleaned weight per curve point, alongside the raw reading: the chart
+    // draws the cleaned one, the raw stays available for anyone who asks.
+    if (fullCurve && Array.isArray(shot.full_curve) && shot.full_curve.length === parsed.samples.length) {
+      const clean = cleanWeightSeries(parsed.samples);
+      shot.full_curve.forEach((point: any, i: number) => { point.weight_clean_g = clean[i]; });
+    }
+  }
 
   return { context, machine: machineContextOf(context), shot };
 }
