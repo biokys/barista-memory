@@ -32,6 +32,7 @@ jobs:
       - name: Version from the tag
         id: v
         run: |
+          echo "sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             echo "version=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
           else
@@ -43,7 +44,7 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          build-args: GIT_COMMIT=${{ github.sha }}
+          build-args: GIT_COMMIT=${{ steps.v.outputs.sha }}
           push: true
           tags: |
             ${{ env.IMAGE }}:${{ steps.v.outputs.version }}
@@ -58,7 +59,7 @@ jobs:
         with:
           context: .
           platforms: linux/amd64
-          build-args: GIT_COMMIT=${{ github.sha }}
+          build-args: GIT_COMMIT=${{ steps.v.outputs.sha }}
           push: true
           tags: ${{ env.IMAGE }}-amd64:${{ steps.v.outputs.version }}
           cache-from: type=gha
@@ -67,7 +68,7 @@ jobs:
         with:
           context: .
           platforms: linux/arm64
-          build-args: GIT_COMMIT=${{ github.sha }}
+          build-args: GIT_COMMIT=${{ steps.v.outputs.sha }}
           push: true
           tags: ${{ env.IMAGE }}-aarch64:${{ steps.v.outputs.version }}
           cache-from: type=gha
