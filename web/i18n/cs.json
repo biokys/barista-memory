@@ -235,5 +235,12 @@
   "maint.saved": "Zapsáno.",
   "maint.confirm_delete": "Smazat tento zápis?",
   "machine.body": "těleso (model)",
-  "theme.title": "Světlý / tmavý režim"
+  "theme.title": "Světlý / tmavý režim",
+  "machine.control": "Ovládání",
+  "machine.mode.standby": "Standby",
+  "machine.mode.brew": "Káva",
+  "machine.mode.steam": "Pára",
+  "machine.mode.water": "Horká voda",
+  "machine.mode_changed": "Stroj přepnut: {mode}.",
+  "machine.mode_failed": "Přepnutí se nepovedlo."
 }

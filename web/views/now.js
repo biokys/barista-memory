@@ -1,6 +1,6 @@
 import { t } from "../lib/i18n.js";
 import { api } from "../lib/api.js";
-import { fmt, sparkline } from "../lib/fmt.js";
+import { fmt, sparkline, toast } from "../lib/fmt.js";
 import { usage, tone } from "../lib/maintenance.js";
 
 function stateLabel(m) {
@@ -18,6 +18,9 @@ function readiness(p) {
   if (p >= 60) return { text: t("machine.partly"), tone: "warn" };
   return { text: t("machine.cold"), tone: "bad" };
 }
+
+/** The modes a person can switch to from here; grind is the grinder's business. */
+const MODES = ["standby", "brew", "steam", "water"];
 
 export async function renderNow(view) {
   const draw = (now) => {
@@ -38,6 +41,9 @@ export async function renderNow(view) {
             <dt>${t("machine.heatup")}</dt><dd class="num">${fmt.duration(m.heatup_s)}</dd>
             <dt>${t("machine.powered_for")}</dt><dd class="num">${fmt.duration(m.powered_for_s)}</dd>
           </dl>
+          <div class="seg" style="margin-top:18px" role="group" aria-label="${t("machine.control")}">
+            ${MODES.map((mode) => `<button type="button" data-mode="${mode}" class="${m.reachable && m.mode_name === mode ? "active" : ""}" ${m.reachable ? "" : "disabled"}>${t("machine.mode." + mode)}</button>`).join("")}
+          </div>
         </section>
         <section class="card">
           <div class="card-head"><h2>${t("now.brewing")}</h2><a class="btn sm ghost" href="#/setup">${t("setup.change")}</a></div>
@@ -74,6 +80,19 @@ export async function renderNow(view) {
           </a>` : `<p class="empty">${t("now.none")}</p>`}
       </section>`;
   };
+  // One handler on the view, since draw() replaces the buttons on every poll.
+  view.addEventListener("click", async (e) => {
+    const button = e.target.closest("[data-mode]");
+    if (!button || button.disabled || button.classList.contains("active")) return;
+    view.querySelectorAll("[data-mode]").forEach((b) => (b.disabled = true));
+    try {
+      await api.setMode(button.dataset.mode);
+      toast(t("machine.mode_changed", { mode: t("machine.mode." + button.dataset.mode) }));
+    } catch (err) {
+      toast(t("machine.mode_failed") + " " + err.message, "bad");
+    }
+    draw(await api.now());
+  });
   draw(await api.now());
   const onLive = (e) => draw(e.detail);
   document.addEventListener("live", onLive);

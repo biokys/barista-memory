@@ -194,6 +194,28 @@ export async function saveProfile(profile: Profile): Promise<{ ok: true; profile
 }
 
 /**
+ * Send one request the firmware never answers. Resolves once the socket has
+ * flushed it; whether the machine acted on it has to be observed elsewhere
+ * (e.g. /api/status for a mode change).
+ */
+export function wsSend(request: Record<string, unknown>): Promise<boolean> {
+  return new Promise((resolve) => {
+    const ws = new WebSocket(wsUrl);
+    let settled = false;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(handle);
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) ws.close();
+      resolve(ok);
+    };
+    const handle = setTimeout(() => finish(false), config.requestTimeoutMs);
+    ws.on("open", () => ws.send(JSON.stringify(request), (error) => finish(!error)));
+    ws.on("error", () => finish(false));
+  });
+}
+
+/**
  * Raw /api/settings. Contains wifiPassword, apPassword and haPassword in
  * cleartext, unauthenticated — callers must pass it through groupSettings()
  * and never return it as-is.

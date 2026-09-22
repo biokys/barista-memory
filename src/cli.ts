@@ -14,6 +14,7 @@ import { fetchStatus, parseSlog } from "./device/client.js";
 import { TAU_HEAT_MIN } from "./thermalModel.js";
 import { recordEvent, listEvents } from "./events.js";
 import { maintenanceStatus, logMaintenance } from "./maintenance.js";
+import { changeMode } from "./machineControl.js";
 import { currentConditions } from "./machineState.js";
 
 function parseArgs(argv: string[]): Record<string, string> {
@@ -44,6 +45,7 @@ function usage(): never {
       "      Corrects an existing period instead of opening a new one.",
       "  cli show          Print the context currently in force",
       "  cli status        One line on the machine: temperature, mode, how long on",
+      "  cli mode <standby|brew|steam|water>   Switch the machine's mode",
       "  cli last          One line on the most recent archived shot",
       "  cli ingest        Run one archive pass",
       "  cli event --title T [--kind equipment|technique|maintenance|beans|other] [--note N] [--at UNIX]",
@@ -144,6 +146,13 @@ try {
       console.log(
         `setup #${setup.id}: ${setup.bean ?? "?"} | grind ${setup.grind_setting ?? "?"} | dose ${setup.dose_g ?? "?"} g`
       );
+      break;
+    }
+
+    case "mode": {
+      const result = await changeMode(rest.find((a) => !a.startsWith("--")) ?? "");
+      if (!result.ok) { console.error(result.message); process.exitCode = 1; break; }
+      console.log(`mode ${result.previous} -> ${result.mode}`);
       break;
     }
 

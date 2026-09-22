@@ -11,6 +11,7 @@ import { fetchStatus, listProfiles, getProfile, fetchRawSettings } from "../devi
 import { groupSettings } from "../device/machineSettings.js";
 import { currentConditions, powerSessions, allStateSamples, type StateRow } from "../machineState.js";
 import { massTemperatureSeries, settledness } from "../thermalModel.js";
+import { changeMode, SWITCHABLE_MODES } from "../machineControl.js";
 import { recordSetup, updateSetup } from "../setups.js";
 import { loadArchivedShot, pressureSparkline } from "../shots.js";
 import { saveProfileMerged } from "../profiles.js";
@@ -285,6 +286,13 @@ route("GET", "/api/machine/state", async (_req, res, _p, url) => {
     .prepare("SELECT id, started_at, ratio, machine_settledness FROM shot_context WHERE started_at BETWEEN ? AND ? ORDER BY started_at")
     .all(since, until);
   json(res, 200, { samples, shots, events: listEvents(db, since, until), sessions: powerSessions(db, since), since, until });
+});
+
+route("POST", "/api/machine/mode", async (req, res) => {
+  const body = await readJson(req);
+  const result = await changeMode(String(body.mode ?? ""));
+  if (!result.ok) return json(res, result.code === "INVALID_MODE" ? 400 : 502, { error: result.code, message: result.message });
+  json(res, 200, { ...result, modes: SWITCHABLE_MODES });
 });
 
 route("GET", "/api/machine/settings", async (_req, res) => {

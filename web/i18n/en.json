@@ -235,5 +235,12 @@
   "maint.saved": "Recorded.",
   "maint.confirm_delete": "Delete this entry?",
   "machine.body": "body (model)",
-  "theme.title": "Light / dark mode"
+  "theme.title": "Light / dark mode",
+  "machine.control": "Control",
+  "machine.mode.standby": "Standby",
+  "machine.mode.brew": "Brew",
+  "machine.mode.steam": "Steam",
+  "machine.mode.water": "Hot water",
+  "machine.mode_changed": "Machine switched to {mode}.",
+  "machine.mode_failed": "Switching failed."
 }

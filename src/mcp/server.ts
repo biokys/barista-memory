@@ -8,6 +8,7 @@ import { fetchStatus, listProfiles, getProfile, fetchRawSettings } from "../devi
 import { loadArchivedShot } from "../shots.js";
 import { saveProfileMerged } from "../profiles.js";
 import { recordEvent, listEvents, eraOf, EVENT_KINDS } from "../events.js";
+import { changeMode, SWITCHABLE_MODES } from "../machineControl.js";
 import { maintenanceStatus, logMaintenance, listMaintenanceLog, markLastFlushAsCafiza, MAINTENANCE_KEYS } from "../maintenance.js";
 import { groupSettings } from "../device/machineSettings.js";
 import { PHASE_ARRAY_SCHEMA } from "./profileSchema.js";
@@ -227,6 +228,17 @@ const TOOLS: Tool[] = [
       properties: {
         group: { type: "string", description: "One of: temperature, pressure, pump, timing, hardware, behavior, warnings (optional)" },
       },
+    },
+  },
+  {
+    name: "set_machine_mode",
+    description:
+      "Switch the machine between standby, brew, steam and hot water, as its own touch UI does. " +
+      "Any running process is stopped by the firmware first. Confirmed against /api/status.",
+    inputSchema: {
+      type: "object",
+      properties: { mode: { type: "string", enum: [...SWITCHABLE_MODES] } },
+      required: ["mode"],
     },
   },
   {
@@ -475,6 +487,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           note: grouped.note,
           source: config.deviceHost,
         });
+      }
+
+      case "set_machine_mode": {
+        const result = await changeMode(String(args?.mode ?? ""));
+        return result.ok ? ok(result) : fail(result.message, result.code);
       }
 
       case "machine_now": {

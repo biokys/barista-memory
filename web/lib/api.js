@@ -21,6 +21,7 @@ export const api = {
   recordSetup: (change) => call("POST", "api/setups", change),
   updateSetup: (id, change) => call("PATCH", `api/setups/${id}`, change),
   machineState: (since, until) => call("GET", `api/machine/state?since=${since}&until=${until}`),
+  setMode: (mode) => call("POST", "api/machine/mode", { mode }),
   machineSettings: () => call("GET", "api/machine/settings"),
   profiles: () => call("GET", "api/profiles"),
   profile: (id) => call("GET", `api/profiles/${id}`),
