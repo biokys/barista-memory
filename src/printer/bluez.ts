@@ -100,8 +100,9 @@ export async function connect(address: string): Promise<Connection> {
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= CONNECT_ATTEMPTS; attempt++) {
     try {
-      const objects = await managedObjects();
-      if (!objects[path]) await scan(6);
+      let objects = await managedObjects();
+      if (!objects[path]) { await scan(10); objects = await managedObjects(); }
+      if (!objects[path]) throw new Error("not seen by Bluetooth: is the printer switched on and in range, and not held by a phone app?");
       const obj = await systemBus().getProxyObject(BLUEZ, path);
       const device = obj.getInterface("org.bluez.Device1");
       const props = obj.getInterface("org.freedesktop.DBus.Properties");
