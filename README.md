@@ -31,7 +31,7 @@ Assistant) and keeps all of them, with the context the machine cannot know:
 - **AI assistants.** An MCP server exposes all of it to Claude Code, Claude
   Desktop and other MCP clients.
 
-![Shot detail: pressure, flow, temperature and weight, with a second shot overlaid](docs/shot.png)
+![Shot detail: pressure, flow, temperature and weight, phases, facts and rating](docs/shot.png)
 ![Boiler temperature over a day beside the modelled body temperature](docs/machine.png)
 
 **Status:** young. Built and used on one Gaggia Classic Pro with GaggiMate
@@ -338,7 +338,7 @@ src/
   web/server.ts          JSON API + static files for the web UI
   cli.ts                 same operations without an MCP client
 web/                     the UI: no build step, ES modules, uPlot, Inter
-scripts/archive.sh       wrapper used by the Robion panel and by hand
+scripts/archive.sh       runs the CLI on the server over ssh
 deploy/                  systemd unit and deployment notes
 ```
 
