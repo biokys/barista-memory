@@ -10,7 +10,10 @@
 set -euo pipefail
 
 DB="${GAGGIMATE_DB:-$HOME/gaggimate-archive/data/archive.db}"
-DEST="${BACKUP_DEST:?set BACKUP_DEST, e.g. user@host:~/backups/barista-memory}"
+# A *relative* remote path, resolved by the remote's shell against its own
+# home. Never write "~" here: the local shell expands it to THIS user's home
+# before the value ever reaches the other machine.
+DEST="${BACKUP_DEST:?set BACKUP_DEST, e.g. user@host:backups/barista-memory}"
 KEEP="${BACKUP_KEEP:-30}"
 
 host="${DEST%%:*}"
