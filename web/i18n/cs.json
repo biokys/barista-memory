@@ -197,9 +197,6 @@
   "stats.per_era": "Podle éry",
   "stats.per_era_hint": "Shoty mezi dvěma změnami. Před WDT vs. po WDT.",
   "stats.col.era": "Od změny",
-  "footer.source": "Zdrojový kód",
-  "footer.deployed": "nasazený commit",
-  "footer.tagline": "Pamatuje si to, co barista ne.",
   "nav.events": "Údržba a změny",
   "events.history": "Zaznamenané změny",
   "maint.title": "Údržba",
@@ -237,5 +234,6 @@
   "maint.detected": "rozpoznáno ze stroje",
   "maint.saved": "Zapsáno.",
   "maint.confirm_delete": "Smazat tento zápis?",
-  "machine.body": "těleso (model)"
+  "machine.body": "těleso (model)",
+  "theme.title": "Světlý / tmavý režim"
 }

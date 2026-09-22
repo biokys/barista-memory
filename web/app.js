@@ -76,27 +76,64 @@ document.getElementById("lang").addEventListener("click", () => {
   setLang(currentLang() === "cs" ? "en" : "cs");
   document.getElementById("lang").textContent = currentLang().toUpperCase();
   document.documentElement.lang = currentLang();
-  navigate(); pollLive(); renderFooter();
+  document.getElementById("theme").title = t("theme.title");
+  navigate(); pollLive();
 });
 
-async function renderFooter() {
-  const foot = document.getElementById("foot");
-  let v = { version: "", commit: "" };
-  try { v = await fetch("api/version").then((r) => r.json()); } catch {}
-  foot.innerHTML = `
-    <span><b>barista-memory</b> <span class="num">${v.version ? "v" + v.version : ""}</span>${v.commit ? ` <span class="faint num" title="${t("footer.deployed")}">${v.commit}</span>` : ""}</span>
-    <span class="foot-links">
-      <a href="https://github.com/biokys/barista-memory" target="_blank" rel="noopener">${t("footer.source")}</a>
-      <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">AGPL-3.0</a>
-    </span>
-    <span class="faint">${t("footer.tagline")}</span>`;
+// ---- theme -----------------------------------------------------------------
+// Dark or light: a saved choice wins; otherwise, inside Home Assistant the
+// parent page's theme is followed (ingress is same-origin, so its CSS
+// variables are readable), and standalone the system preference is.
+
+const INGRESS = location.pathname.includes("/api/hassio_ingress/");
+if (INGRESS) document.documentElement.classList.add("ingress");
+
+function parentPrefersDark() {
+  try {
+    const bg = getComputedStyle(window.parent.document.documentElement).getPropertyValue("--primary-background-color").trim();
+    const m = bg.match(/^#([0-9a-f]{6})$/i);
+    if (!m) return null;
+    const n = parseInt(m[1], 16);
+    const lum = (0.2126 * (n >> 16) + 0.7152 * ((n >> 8) & 255) + 0.0722 * (n & 255)) / 255;
+    return lum < 0.5;
+  } catch { return null; }
+}
+
+function resolveTheme() {
+  let saved = null;
+  try { saved = localStorage.getItem("theme"); } catch {}
+  if (saved === "light" || saved === "dark") return saved;
+  const parent = INGRESS ? parentPrefersDark() : null;
+  if (parent != null) return parent ? "dark" : "light";
+  return matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}
+
+function applyTheme(rerender) {
+  const theme = resolveTheme();
+  document.documentElement.dataset.theme = theme;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#f6f2ec" : "#0f0e0c");
+  // Charts read their colours once, when drawn, so the current view is redrawn.
+  if (rerender) navigate();
+}
+
+document.getElementById("theme").addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+  try { localStorage.setItem("theme", next); } catch {}
+  applyTheme(true);
+});
+matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => applyTheme(true));
+if (INGRESS) {
+  try {
+    new MutationObserver(() => applyTheme(true)).observe(window.parent.document.documentElement, { attributes: true, attributeFilter: ["style", "class"] });
+  } catch {}
 }
 
 await initI18n();
 document.getElementById("lang").textContent = currentLang().toUpperCase();
+document.getElementById("theme").title = t("theme.title");
 document.documentElement.lang = currentLang();
+applyTheme(false);
 window.addEventListener("hashchange", navigate);
 navigate();
 pollLive();
-renderFooter();
 setInterval(pollLive, 20000);

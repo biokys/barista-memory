@@ -197,9 +197,6 @@
   "stats.per_era": "Per era",
   "stats.per_era_hint": "Shots between two changes. Before the WDT vs. after.",
   "stats.col.era": "Since",
-  "footer.source": "Source",
-  "footer.deployed": "deployed commit",
-  "footer.tagline": "Remembers what the barista cannot.",
   "nav.events": "Maintenance & changes",
   "events.history": "Recorded changes",
   "maint.title": "Maintenance",
@@ -237,5 +234,6 @@
   "maint.detected": "detected from the machine",
   "maint.saved": "Recorded.",
   "maint.confirm_delete": "Delete this entry?",
-  "machine.body": "body (model)"
+  "machine.body": "body (model)",
+  "theme.title": "Light / dark mode"
 }

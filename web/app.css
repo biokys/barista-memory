@@ -24,7 +24,35 @@
   --radius: 14px;
   --radius-s: 9px;
   --pad: clamp(14px, 3vw, 28px);
+  --shadow: rgba(0,0,0,.5);
   --font: "Inter Variable", "Inter", -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+/* Light: warm paper rather than plain white, the same amber accent darkened
+   for contrast, the four data colours kept recognisable. app.js sets
+   data-theme from a saved choice, the Home Assistant theme, or the system. */
+:root[data-theme="light"] {
+  --bg: #f6f2ec;
+  --bg-2: #f0ebe3;
+  --surface: #fdfbf8;
+  --surface-2: #f2ede5;
+  --line: #e5ded2;
+  --line-2: #d5cbbb;
+  --text: #201b15;
+  --text-2: #5f5749;
+  --text-3: #8b8274;
+  --accent: #b5742f;
+  --accent-2: #d9a066;
+  --pressure: #b5742f;
+  --flow: #2e6f9e;
+  --temp: #c4503c;
+  --weight: #4d8a3e;
+  --ok: #3f8a3f;
+  --warn: #b0820e;
+  --bad: #c43d2a;
+  --shadow: rgba(60,40,20,.18);
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
@@ -49,6 +77,8 @@ p { margin: 0; }
        background: color-mix(in oklab, var(--bg) 86%, transparent); backdrop-filter: blur(14px) saturate(1.2);
        border-bottom: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+/* Inside Home Assistant the sidebar already names the app. */
+.ingress .brand { display: none; }
 .brand-mark { width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, var(--accent-2), var(--accent) 60%, #8a5a2a); box-shadow: 0 0 0 3px rgba(217,160,102,.12); }
 .nav { display: flex; gap: 2px; flex: 1; overflow-x: auto; scrollbar-width: none; }
 .nav::-webkit-scrollbar { display: none; }
@@ -151,7 +181,7 @@ p { margin: 0; }
 .btn.ghost { background-color: transparent; }
 .btn:disabled { opacity: .5; cursor: default; }
 .btn.sm { padding: 6px 11px; font-size: .84rem; }
-.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 10px 18px; font-size: .9rem; box-shadow: 0 10px 40px rgba(0,0,0,.5); z-index: 20; animation: rise .25s ease; }
+.toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 10px 18px; font-size: .9rem; box-shadow: 0 10px 40px var(--shadow); z-index: 20; animation: rise .25s ease; }
 .toast.ok { border-color: color-mix(in oklab, var(--ok) 40%, transparent); }
 .toast.bad { border-color: color-mix(in oklab, var(--bad) 40%, transparent); }
 @keyframes rise { from { opacity: 0; transform: translate(-50%, 8px); } }
@@ -192,15 +222,6 @@ td.r, th.r { text-align: right; }
 .tl-item::before { content: ""; position: absolute; left: -17px; top: 15px; width: 9px; height: 9px; border-radius: 50%; background: var(--line-2); border: 2px solid var(--bg); }
 .tl-item.current::before { background: var(--accent); box-shadow: 0 0 0 3px rgba(217,160,102,.2); }
 .tl-item .when { font-size: .78rem; color: var(--text-3); }
-
-/* ---- footer ---- */
-.foot { max-width: 1120px; width: 100%; margin: 0 auto; padding: 18px var(--pad) 26px; display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
-        border-top: 1px solid var(--line); color: var(--text-3); font-size: .78rem; }
-.foot b { color: var(--text-2); font-weight: 560; }
-.foot-links { display: flex; gap: 16px; }
-.foot a { color: var(--text-2); border-bottom: 1px solid var(--line-2); padding-bottom: 1px; }
-.foot a:hover { color: var(--accent-2); border-color: var(--accent); }
-@media (max-width: 560px) { .foot { justify-content: center; text-align: center; gap: 10px; } }
 
 /* ---- misc ---- */
 .empty { color: var(--text-3); text-align: center; padding: 40px 0; }

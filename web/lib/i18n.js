@@ -23,7 +23,7 @@ export function setLang(next) {
   localStorage.setItem("lang", next);
   // Synchronous switch for the caller; the dictionary is small.
   const xhr = new XMLHttpRequest();
-  xhr.open("GET", `/i18n/${lang}.json`, false);
+  xhr.open("GET", `i18n/${lang}.json`, false);
   xhr.send();
   dict = JSON.parse(xhr.responseText);
 }
