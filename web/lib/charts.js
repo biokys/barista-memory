@@ -15,11 +15,39 @@ function axis(extra = {}) {
   };
 }
 
+/**
+ * A readout row under the plot instead of uPlot's legend.
+ *
+ * uPlot's live legend is empty until the cursor is over the chart, which
+ * reads as broken. This one shows the values under the cursor while hovering
+ * and each series' `idle` figure (a peak, a mean, a last value) otherwise, so
+ * the row always says something.
+ */
+function readout(plot, container, meta) {
+  const row = document.createElement("div");
+  row.className = "readout";
+  row.innerHTML = `<span class="x"></span>` + meta.map((m, i) =>
+    `<span class="s" data-i="${i}"><i style="background:${m.color}"></i><b></b><em>${m.label}</em></span>`).join("");
+  container.appendChild(row);
+  const cells = [...row.querySelectorAll(".s b")];
+  const xCell = row.querySelector(".x");
+  const idle = () => { xCell.textContent = ""; meta.forEach((m, i) => (cells[i].textContent = m.idle ?? "–")); };
+  idle();
+  plot.hooks.setCursor = plot.hooks.setCursor || [];
+  plot.hooks.setCursor.push((u) => {
+    const idx = u.cursor.idx;
+    if (idx == null) return idle();
+    xCell.textContent = meta[0].x ? meta[0].x(u.data[0][idx]) : "";
+    meta.forEach((m, i) => { const v = u.data[m.series][idx]; cells[i].textContent = v == null ? "–" : m.fmt(v); });
+  });
+  return row;
+}
+
 /** Responsive: re-size on container width changes. Returns a cleanup fn. */
 function responsive(plot, container) {
   const ro = new ResizeObserver(() => plot.setSize({ width: container.clientWidth, height: plot.height }));
   ro.observe(container);
-  return () => { ro.disconnect(); plot.destroy(); };
+  return () => { ro.disconnect(); plot.destroy(); container.querySelector(".readout")?.remove(); };
 }
 
 /**
@@ -67,7 +95,7 @@ export function shotChart(container, shot, compare = null) {
   const plot = new uPlot({
     width: container.clientWidth, height: 300,
     cursor: { drag: { x: true, y: false } },
-    legend: { live: true },
+    legend: { show: false },
     scales: { x: { time: false }, y: { range: [0, 12] }, t: { range: (u, min, max) => [Math.floor(Math.min(min, 88) - 1), Math.ceil(Math.max(max, 96) + 1)] }, w: { range: [0, Math.max(50, ...data[4]) * 1.05] } },
     axes: [
       axis({ scale: "x", values: (u, v) => v.map((n) => n + " s") }),
@@ -90,6 +118,17 @@ export function shotChart(container, shot, compare = null) {
       }],
     },
   }, data, container);
+  const sm = shot.summary || {};
+  const meta = [
+    { series: 1, label: "bar", color: c.pressure, fmt: (v) => v.toFixed(1), idle: sm.pressure ? `⌃ ${sm.pressure.max_bar.toFixed(1)}` : "–", x: (t) => `${t.toFixed(1)} s` },
+    { series: 2, label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(2), idle: sm.flow ? `⌀ ${sm.flow.average_flow_rate_ml_s.toFixed(2)}` : "–" },
+    { series: 3, label: "°C", color: c.temp, fmt: (v) => v.toFixed(1), idle: sm.temperature ? `⌀ ${sm.temperature.average_celsius.toFixed(1)}` : "–" },
+    { series: 4, label: "g", color: c.weight, fmt: (v) => v.toFixed(1), idle: (() => { const w = data[4].filter((v) => v != null); return w.length ? `→ ${Math.max(...w).toFixed(1)}` : "–"; })() },
+  ];
+  if (compare?.full_curve) meta.push(
+    { series: 5, label: "bar ⁽²⁾", color: c.pressure, fmt: (v) => v.toFixed(1), idle: "" },
+    { series: 6, label: "ml/s ⁽²⁾", color: c.flow, fmt: (v) => v.toFixed(2), idle: "" });
+  readout(plot, container, meta);
   return responsive(plot, container);
 }
 
@@ -108,6 +147,7 @@ export function machineChart(container, samples, shots, sessions, events = []) {
   const plot = new uPlot({
     width: container.clientWidth, height: 280,
     cursor: { drag: { x: true, y: false } },
+    legend: { show: false },
     scales: { x: { time: true }, y: { range: [15, 105] } },
     axes: [
       axis({ scale: "x" }),
@@ -146,6 +186,11 @@ export function machineChart(container, samples, shots, sessions, events = []) {
       }],
     },
   }, data, container);
+  const last = [...samples].reverse().find((s) => s.reachable && s.current_temp != null);
+  readout(plot, container, [
+    { series: 1, label: "°C", color: c.temp, fmt: (v) => v.toFixed(1), idle: last ? `${last.current_temp.toFixed(1)}` : "–", x: (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
+    { series: 2, label: "target", color: c.faint, fmt: (v) => String(v), idle: last && last.target_temp > 0 ? String(last.target_temp) : "–" },
+  ]);
   return responsive(plot, container);
 }
 
@@ -163,9 +208,13 @@ export function scatterChart(container, xs, ys, groups, labels, { xLabel, yLabel
   const plot = new uPlot({
     width: container.clientWidth, height: 260,
     cursor: { drag: { x: false, y: false } },
+    legend: { show: false },
     scales: { x: { time }, y: yRange ? { range: yRange } : {} },
     axes: [axis({ scale: "x", label: xLabel }), axis({ scale: "y", label: yLabel })],
     series,
   }, data, container);
+  const row = document.createElement("div"); row.className = "readout";
+  row.innerHTML = uniq.map((g, i) => `<span class="s"><i style="background:${palette[i % palette.length]}"></i><em>${labels?.[g] ?? g}</em></span>`).join("");
+  container.appendChild(row);
   return responsive(plot, container);
 }

@@ -65,7 +65,7 @@ p { margin: 0; }
 
 /* ---- layout ---- */
 .view { max-width: 1120px; margin: 0 auto; padding: var(--pad); display: grid; gap: 18px; }
-.grid { display: grid; gap: 14px; }
+.grid { display: grid; gap: 14px; align-items: start; }
 .grid.cols-2 { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 .grid.cols-3 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
@@ -123,6 +123,12 @@ p { margin: 0; }
 .u-legend .u-marker { border-radius: 2px; }
 .u-legend .u-series th { font-weight: 500 !important; }
 .u-select { background: rgba(217,160,102,.12) !important; }
+.readout { display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline; margin-top: 10px; padding: 8px 4px 0; border-top: 1px solid var(--line); font-size: .8rem; color: var(--text-3); min-height: 22px; }
+.readout .x { min-width: 52px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.readout .s { display: inline-flex; align-items: baseline; gap: 6px; }
+.readout .s i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; }
+.readout .s b { color: var(--text); font-weight: 560; font-variant-numeric: tabular-nums; min-width: 2.5em; }
+.readout .s em { font-style: normal; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .78rem; color: var(--text-2); }
 .legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
 

@@ -18,7 +18,6 @@ export async function renderMachine(view) {
         <div class="card-head"><h2>${t("machine.temperature_history")}</h2></div>
         <div class="chart" id="chart"></div>
         ${state.samples.length ? "" : `<p class="empty">${t("machine.no_samples")}</p>`}
-        <div class="legend" style="margin-top:10px"><span><i style="background:var(--temp)"></i>°C</span><span><i style="background:var(--text-3)"></i>${t("machine.target")}</span><span><i style="background:var(--accent)"></i>${t("common.shots")}</span></div>
       </section>
       <div class="grid cols-2">
         <section class="card">

@@ -38,12 +38,6 @@ export async function renderShot(view, [id]) {
         <label class="row small muted">${t("shot.compare")} <select id="cmp" class="btn sm"><option value="">${t("shot.compare_none")}</option></select></label>
       </div>
       <div class="chart" id="chart"></div>
-      <div class="legend" style="margin-top:10px">
-        <span><i style="background:var(--pressure)"></i>${t("shot.pressure")} (bar)</span>
-        <span><i style="background:var(--flow)"></i>${t("shot.flow")} (ml/s)</span>
-        <span><i style="background:var(--temp)"></i>${t("shot.temperature")} (°C)</span>
-        <span><i style="background:var(--weight)"></i>${t("shot.weight")} (g)</span>
-      </div>
       ${shot ? `<div class="phase-bar" style="margin-top:14px">${phaseBar}</div>
       <div class="row small faint" style="margin-top:6px;gap:18px">${(shot.phases || []).map((p) => `<span>${t("shot.phase." + p.name) || p.name} <b class="num muted">${p.duration_seconds.toFixed(1)} s</b> · ${p.avg_pressure_bar.toFixed(1)} bar · ${p.avg_temperature_c.toFixed(1)}°</span>`).join("")}</div>` : ""}
     </section>
