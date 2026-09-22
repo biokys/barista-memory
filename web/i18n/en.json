@@ -285,5 +285,8 @@
   "receipt.web_url": "Web address for the QR code",
   "receipt.show_chart": "Chart",
   "receipt.show_qr": "QR code",
-  "receipt.preview": "Preview of the last receipt"
+  "receipt.preview": "Preview of the last receipt",
+  "nav.settings": "Settings",
+  "settings.title": "Settings",
+  "settings.hint": "The receipt printer, what the receipt says, and the machine's scale. Everything else is set on the machine or through environment variables."
 }

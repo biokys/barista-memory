@@ -27,6 +27,8 @@ COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY web ./web
+# Receipt fonts (Inter, OFL) for the SVG rasteriser.
+COPY assets ./assets
 # Runs as root on purpose: Home Assistant mounts /data as root with
 # options.json readable only by root, and add-ons run as root by convention.
 RUN mkdir -p /data

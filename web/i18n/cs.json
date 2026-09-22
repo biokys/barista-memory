@@ -285,5 +285,8 @@
   "receipt.web_url": "Adresa webu pro QR kód",
   "receipt.show_chart": "Graf",
   "receipt.show_qr": "QR kód",
-  "receipt.preview": "Náhled poslední účtenky"
+  "receipt.preview": "Náhled poslední účtenky",
+  "nav.settings": "Nastavení",
+  "settings.title": "Nastavení",
+  "settings.hint": "Tiskárna účtenek, podoba účtenky a váha stroje. Vše ostatní se řídí ze stroje nebo z proměnných prostředí."
 }

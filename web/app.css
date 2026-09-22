@@ -123,6 +123,7 @@ p { margin: 0; }
 .big { font-size: clamp(3.2rem, 9vw, 5rem); line-height: 1; font-weight: 600; letter-spacing: -0.04em; }
 .big small { font-size: .35em; color: var(--text-2); font-weight: 500; letter-spacing: 0; margin-left: 4px; }
 .select-btn { padding: 3px 10px; font-size: .78rem; font-weight: 500; color: var(--text-2); }
+.settings-grid { margin-bottom: 18px; }
 .receipt-preview { display: block; width: 100%; max-width: 384px; margin: 0 auto; border-radius: 6px; background: #fff; }
 textarea { width: 100%; resize: vertical; }
 /* Segmented control: the machine's four modes, the current one filled. */
