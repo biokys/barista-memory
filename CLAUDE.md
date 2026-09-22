@@ -224,8 +224,11 @@ host and path from `.env`). The server is a git checkout of `origin/main`; the
 script refuses an unclean or unpushed tree here and refuses to pull over local
 edits there. Do not tar files over — that is how the old vendored copies drifted.
 
-The MCP server is reached over ssh stdio, so it needs no port; see
-`deploy/README.md`.
+The MCP tools live in `src/mcp/tools.ts` and are served two ways: stdio
+(`src/mcp/server.ts`, what Claude Code on this Mac uses over ssh) and
+Streamable HTTP at `/mcp` on the web port, stateless, one server per request,
+only when `GAGGIMATE_MCP_TOKEN` is set (`src/mcp/http.ts`). The HTTP one is
+for container and add-on users; it is not reachable through HA ingress.
 
 ## Conventions
 

@@ -21,6 +21,7 @@ const OPTION_TO_ENV: Record<string, string> = {
   mqtt_user: "GAGGIMATE_MQTT_USER",
   mqtt_password: "GAGGIMATE_MQTT_PASSWORD",
   ready_percent: "GAGGIMATE_READY_PCT",
+  mcp_token: "GAGGIMATE_MCP_TOKEN",
 };
 
 /**

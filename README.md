@@ -197,6 +197,15 @@ on your LAN. The MCP server runs inside the container too:
 claude mcp add barista-memory -- docker exec -i barista-memory node dist/mcp/server.js
 ```
 
+Or over the network: set `GAGGIMATE_MCP_TOKEN` and the same tools are served
+at `http://<host>:8080/mcp` as Streamable HTTP, for Claude Code, Claude
+Desktop or any MCP client on your LAN or VPN:
+
+```bash
+claude mcp add barista-memory --transport http http://<host>:8080/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
 ### Home Assistant add-on
 
 The same image packaged as an add-on, with Home Assistant's login in front
@@ -252,7 +261,9 @@ only when overdue.
 
 ### Using it from an AI assistant
 
-`src/mcp/server.ts` is an MCP server over stdio. It reads and writes the
+`src/mcp/tools.ts` holds the MCP tools; `src/mcp/server.ts` serves them over
+stdio and the web server serves them at `/mcp` over Streamable HTTP when
+`GAGGIMATE_MCP_TOKEN` is set. It reads and writes the
 archive, reads the machine's live state, and is the one place that changes
 the machine (profiles). With Claude Code, on the box that runs the daemon:
 

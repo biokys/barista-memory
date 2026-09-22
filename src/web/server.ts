@@ -12,6 +12,7 @@ import { groupSettings } from "../device/machineSettings.js";
 import { currentConditions, powerSessions, allStateSamples, type StateRow } from "../machineState.js";
 import { massTemperatureSeries, settledness } from "../thermalModel.js";
 import { changeMode, SWITCHABLE_MODES } from "../machineControl.js";
+import { handleMcpRequest, mcpEnabled } from "../mcp/http.js";
 import { recordSetup, updateSetup } from "../setups.js";
 import { loadArchivedShot, pressureSparkline } from "../shots.js";
 import { saveProfileMerged, selectProfileOnMachine } from "../profiles.js";
@@ -341,6 +342,11 @@ const server = createServer(async (req, res) => {
   const path = normalize(url.pathname);
 
   try {
+    if (path === "/mcp") {
+      await handleMcpRequest(db, req, res);
+      return;
+    }
+
     if (path.startsWith("/api/")) {
       for (const r of routes) {
         if (r.method !== req.method) continue;
@@ -374,5 +380,6 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(`barista-memory web on http://${HOST}:${PORT} (db ${config.databasePath}, machine ${config.deviceHost})`);
+  console.log(mcpEnabled() ? `MCP over HTTP at /mcp (bearer token set)` : `MCP over HTTP off: set GAGGIMATE_MCP_TOKEN to enable /mcp`);
   if (!existsSync(join(WEB, "index.html"))) console.warn("web/index.html is missing — API only");
 });

@@ -41,6 +41,24 @@ A notification when the machine is ready is then one automation: trigger on
 
 Another broker can be set under Configuration instead.
 
+## AI assistants (MCP)
+
+The archive can be a tool for Claude Code, Claude Desktop and other MCP
+clients: shots with their context, machine state, maintenance, profiles.
+
+1. Set **MCP token** under Configuration to a long random string.
+2. Map port 8080 in the Network section (the endpoint is on the web port).
+3. On your computer, on the same network or VPN:
+
+```
+claude mcp add barista-memory --transport http http://<home-assistant-ip>:8080/mcp \
+  --header "Authorization: Bearer <your token>"
+```
+
+Clients that only speak stdio can use a local bridge such as `mcp-remote`
+with the same URL and header. The endpoint is never reachable through
+ingress and must not be exposed to the internet.
+
 ## Direct access
 
 The web UI is reached through Home Assistant (ingress), which gives it Home

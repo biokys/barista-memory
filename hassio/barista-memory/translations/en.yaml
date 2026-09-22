@@ -20,3 +20,6 @@ configuration:
   mqtt_password:
     name: MQTT password (optional)
     description: Only with a custom broker URL.
+  mcp_token:
+    name: MCP token (optional)
+    description: Enables the MCP endpoint for AI assistants at http://<home-assistant-ip>:8080/mcp (map port 8080 in the Network section). Choose a long random string; clients send it as a Bearer token.

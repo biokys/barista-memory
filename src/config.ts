@@ -30,6 +30,8 @@ export const config = {
   mqttPrefix: process.env.GAGGIMATE_MQTT_PREFIX ?? "barista-memory",
   /** Home Assistant's discovery prefix. */
   haDiscoveryPrefix: process.env.GAGGIMATE_HA_DISCOVERY ?? "homeassistant",
+  /** Bearer token for MCP over HTTP at /mcp on the web port; unset = endpoint off. */
+  mcpToken: process.env.GAGGIMATE_MCP_TOKEN ?? "",
   /** Warm-up percent at which the "ready" sensor turns on. */
   readyPct: Number(process.env.GAGGIMATE_READY_PCT ?? 85),
 } as const;
