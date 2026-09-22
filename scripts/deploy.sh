@@ -24,9 +24,11 @@ if [ "$(git rev-parse HEAD)" != "$(git rev-parse '@{upstream}')" ]; then
 fi
 want="$(git rev-parse --short HEAD)"
 
-ssh -o BatchMode=yes "$SERVER_HOST" bash -s "$SERVER_DIR" "$SERVICES" "$want" <<'REMOTE'
+# Services go last and unquoted on purpose: bash -s splits them into $3.., and
+# the commit must stay a single positional argument before them.
+ssh -o BatchMode=yes "$SERVER_HOST" bash -s "$SERVER_DIR" "$want" $SERVICES <<'REMOTE'
 set -euo pipefail
-dir="$1"; services="$2"; want="$3"
+dir="$1"; want="$2"; shift 2; services="$*"
 cd "$dir"
 if [ -n "$(git status --porcelain)" ]; then
   echo "Pi checkout has local changes — refusing to pull over them:" >&2
