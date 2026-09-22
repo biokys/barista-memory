@@ -1,0 +1,35 @@
+# Deploying the archive to the Raspberry Pi
+
+The archive runs where the data must outlive the machine — on the Pi, not on the
+GaggiMate, whose flash is cleared by a firmware update.
+
+```bash
+# from the project root
+tar czf - --exclude node_modules --exclude .git src package.json tsconfig.json \
+  | ssh <user>@<pi> "mkdir -p ~/barista-memory && tar xzf - -C ~/barista-memory"
+ssh <user>@<pi> "cd ~/barista-memory && npm install && npm run build"
+
+sudo cp deploy/barista-memory.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now barista-memory
+journalctl -u barista-memory -f
+```
+
+## Using the MCP server from Claude Code
+
+The MCP speaks stdio, so it needs no port of its own — it is reached over ssh:
+
+```bash
+claude mcp add barista-memory -- \
+  ssh <user>@<pi> "cd ~/barista-memory && GAGGIMATE_HOST=<machine-ip> GAGGIMATE_DB=$HOME/barista-memory/data/archive.db node --no-warnings dist/mcp/server.js"
+```
+
+## Backing it up
+
+The archive is one SQLite file. It is in WAL mode, so copy it with sqlite3
+rather than `cp`, which can catch it mid-write:
+
+```bash
+ssh <user>@<pi> "sqlite3 ~/barista-memory/data/archive.db \".backup '/tmp/archive-backup.db'\"" \
+  && scp <user>@<pi>:/tmp/archive-backup.db ./backups/archive-$(date +%F).db
+```

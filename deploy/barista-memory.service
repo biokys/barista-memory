@@ -1,0 +1,25 @@
+[Unit]
+Description=GaggiMate shot archive (poll the machine, store shots, sync brewing context)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=<user>
+WorkingDirectory=/home/<user>/barista-memory
+# An IP, not gaggimate.local: mDNS resolution can take seconds and would eat
+# the request timeout on some hosts.
+Environment=GAGGIMATE_HOST=<machine-ip>
+Environment=GAGGIMATE_DB=/home/<user>/barista-memory/data/archive.db
+Environment=GAGGIMATE_POLL_INTERVAL=30
+# Push bean / dose / grind into the machine's own shot notes after archiving.
+Environment=GAGGIMATE_SYNC_NOTES=1
+Environment=NODE_OPTIONS=--no-warnings
+ExecStart=/usr/bin/node dist/daemon.js
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

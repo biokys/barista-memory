@@ -1,0 +1,28 @@
+{
+  "name": "barista-memory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Remembers what the barista cannot: every shot, the beans and grind in force, and how warm the machine really was",
+  "scripts": {
+    "build": "tsc && cp src/db/schema.sql dist/db/schema.sql",
+    "ingest": "node dist/ingest.js",
+    "daemon": "node dist/daemon.js",
+    "mcp": "node dist/mcp/server.js",
+    "cli": "node dist/cli.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.6.0"
+  },
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/biokys/barista-memory.git"
+  }
+}
