@@ -97,7 +97,7 @@ export function shotChart(container, shot, compare = null) {
  * Boiler temperature over hours: current temp, target as a faint step,
  * unreachable stretches as grey bands, shots as amber ticks.
  */
-export function machineChart(container, samples, shots, sessions) {
+export function machineChart(container, samples, shots, sessions, events = []) {
   const c = colors();
   const x = samples.map((s) => s.sampled_at);
   const data = [
@@ -129,6 +129,12 @@ export function machineChart(container, samples, shots, sessions) {
             ctx.fillStyle = c.faint; ctx.globalAlpha = 0.08;
             ctx.fillRect(u.valToPos(end, "x", true), u.bbox.top, u.valToPos(next, "x", true) - u.valToPos(end, "x", true), u.bbox.height);
           }
+        }
+        for (const e of events) {
+          const px = u.valToPos(e.at, "x", true);
+          ctx.globalAlpha = 0.7; ctx.strokeStyle = c.flow; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+          ctx.beginPath(); ctx.moveTo(px, u.bbox.top); ctx.lineTo(px, u.bbox.top + u.bbox.height); ctx.stroke(); ctx.setLineDash([]);
+          ctx.fillStyle = c.flow; ctx.font = "10px " + css("--font"); ctx.fillText(e.title, px + 4, u.bbox.top + 12);
         }
         ctx.globalAlpha = 0.9;
         for (const s of shots) {

@@ -12,6 +12,7 @@ import { recordSetup, updateSetup, type SetupChange } from "./setups.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "./ingest.js";
 import { fetchStatus, parseSlog } from "./device/client.js";
 import { TAU_HEAT_MIN } from "./thermalModel.js";
+import { recordEvent, listEvents } from "./events.js";
 import { currentConditions } from "./machineState.js";
 
 function parseArgs(argv: string[]): Record<string, string> {
@@ -44,6 +45,9 @@ function usage(): never {
       "  cli status        One line on the machine: temperature, mode, how long on",
       "  cli last          One line on the most recent archived shot",
       "  cli ingest        Run one archive pass",
+      "  cli event --title T [--kind equipment|technique|maintenance|beans|other] [--note N] [--at UNIX]",
+      "      Record a turning point (new WDT, puck screen, basket...). Later shots belong to its era.",
+      "  cli events        List turning points",
       "  cli stats         Print archive counts",
       "  cli recompute-weights [--all]",
       "      Re-derive the stable weight from the stored logs; --all redoes every shot.",
@@ -239,6 +243,17 @@ try {
     case "recompute-context": {
       const changed = recomputeMachineContext(db, args.all === "true");
       console.log(`re-derived machine context for ${changed} shot(s)`);
+      break;
+    }
+
+    case "event": {
+      const ev = recordEvent(db, { title: args.title ?? "", kind: args.kind, note: args.note, at: args.at ? Number(args.at) : undefined });
+      console.log(`event #${ev.id}: ${ev.kind} — ${ev.title}`);
+      break;
+    }
+
+    case "events": {
+      for (const ev of listEvents(db)) console.log(`  #${ev.id}  ${new Date(ev.at * 1000).toISOString().slice(0, 16)}  ${ev.kind.padEnd(11)} ${ev.title}${ev.note ? "  (" + ev.note + ")" : ""}`);
       break;
     }
 

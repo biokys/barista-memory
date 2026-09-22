@@ -22,7 +22,7 @@ export function statsSummary(db: DatabaseSync) {
     .prepare(
       `SELECT id, started_at, bean, grind_setting, dose_g, ratio,
               duration_ms / 1000.0 AS seconds, machine_settledness AS settledness, rating,
-              stable_weight_source AS weight_source
+              stable_weight_source AS weight_source, era_event_id
        FROM shot_context WHERE ratio IS NOT NULL ORDER BY started_at`
     )
     .all();
@@ -48,5 +48,19 @@ export function statsSummary(db: DatabaseSync) {
     )
     .get();
 
-  return { totals, perBean, points, consistency };
+  // Per era: the shots between consecutive events, so "before the WDT" and
+  // "after the WDT" can be set side by side.
+  const perEra = db
+    .prepare(
+      `SELECT e.id, e.at, e.kind, e.title,
+              COUNT(c.id) AS shots,
+              ROUND(AVG(c.ratio), 2) AS avg_ratio,
+              ROUND(AVG(c.duration_ms) / 1000.0, 1) AS avg_seconds,
+              ROUND(AVG(c.rating), 2) AS avg_rating
+       FROM events e LEFT JOIN shot_context c ON c.era_event_id = e.id
+       GROUP BY e.id ORDER BY e.at DESC`
+    )
+    .all();
+
+  return { totals, perBean, points, consistency, perEra };
 }

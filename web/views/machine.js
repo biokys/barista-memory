@@ -38,7 +38,7 @@ export async function renderMachine(view) {
       </div>`;
     view.querySelectorAll("[data-r]").forEach((b) => (b.onclick = () => { range = b.dataset.r; localStorage.setItem("machine.range", range); load(); }));
     if (destroy) destroy();
-    destroy = state.samples.length ? machineChart(view.querySelector("#chart"), state.samples, state.shots, state.sessions) : null;
+    destroy = state.samples.length ? machineChart(view.querySelector("#chart"), state.samples, state.shots, state.sessions, state.events || []) : null;
   };
   await load();
   return () => destroy && destroy();

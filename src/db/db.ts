@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** Bump when a migration is added below. */
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 6;
 
 /**
  * Changes that CREATE ... IF NOT EXISTS cannot make on their own.
@@ -19,7 +19,7 @@ const SCHEMA_VERSION = 5;
 function migrate(db: DatabaseSync, from: number): void {
   // Version 2 only adds machine_state, which CREATE TABLE IF NOT EXISTS
   // handles on its own; no step is needed here.
-  if (from < 5) {
+  if (from < 6) {
     // Columns on an existing table, and a view that exposes them. Backfilling
     // is left to the recompute functions in ingest.ts, which need the parser
     // and the session logic and so do not belong in the storage layer.
@@ -142,6 +142,7 @@ export interface ShotContextRow {
   rating: number | null;
   taste_note: string | null;
   setup_id: number | null;
+  era_event_id: number | null;
 }
 
 /** The setup in force at a point in time, or null if none had started yet. */

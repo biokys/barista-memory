@@ -58,6 +58,7 @@ export async function renderShot(view, [id]) {
           <dt>${t("shot.time")}</dt><dd class="num">${fmt.seconds(c.duration_ms / 1000)}${shot ? ` <span class="muted">(${t("shot.preinfusion")} ${shot.summary.extraction.preinfusion_time_seconds.toFixed(0)} s)</span>` : ""}</dd>
           <dt>${t("shot.temp")}</dt><dd class="num">${shot ? fmt.temp(shot.summary.temperature.average_celsius) : "–"} <span class="muted">· ${t("machine.target")} ${shot?.summary.temperature.target_average ?? "–"}</span></dd>
           <dt>${t("shot.peak")}</dt><dd class="num">${fmt.bar(peak)}${dec != null ? ` <span class="muted">· ${t("shot.decline")} ${dec.toFixed(1)}</span>` : ""}</dd>
+          <dt>${t("shot.era")}</dt><dd>${data.era ? `<span class="pill accent">${t("events.kind." + data.era.kind)}</span> ${t("shot.era_since", { title: data.era.title, n: data.era.shots_since })}` : `<span class="faint">${t("shot.era_none")}</span>`}</dd>
           <dt>${t("shot.machine")}</dt><dd>${m ? `<span class="num">${t("machine.heating_for")} ${fmt.duration(m.heating_for_s)}</span> <span class="pill ${readiness}">${fmt.pct(m.settledness)}</span>` : `<span class="faint">${t("machine.unknown")}</span>`}</dd>
         </dl>
       </section>

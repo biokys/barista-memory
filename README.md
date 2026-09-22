@@ -67,7 +67,10 @@ src/
                          settings read)
   mcp/profileSchema.ts   phase schema for save_profile, mirrors the firmware
   device/machineSettings.ts  allowlist for /api/settings (it leaks passwords)
+  events.ts              turning points (new tool, technique change) and eras
+  web/server.ts          JSON API + static files for the web UI
   cli.ts                 same operations without an MCP client
+web/                     the UI: no build step, ES modules, uPlot, Inter
 scripts/archive.sh       wrapper used by the Robion panel and by hand
 deploy/                  systemd unit and deployment notes
 ```
@@ -167,6 +170,21 @@ Run the daemon permanently with `deploy/barista-memory.service` (fill in the
 placeholders) on any always-on Linux box — it was built on a Raspberry Pi, but
 nothing depends on that — and back the database up with `deploy/backup-db.sh`:
 the archive is the only durable copy of your shots.
+
+### The web UI
+
+`npm run web` serves a dark, phone-first interface on port 8080 (`GAGGIMATE_WEB_PORT`):
+what the machine is doing and how warm it really is, the shot history with a
+pressure sparkline per row, a shot detail with every curve and a second shot
+overlaid for comparison, the boiler temperature over days, statistics per bean
+and per era, and the same "what am I grinding" form as the CLI. Czech and
+English, switchable in the header. `deploy/barista-memory-web.service` runs it
+permanently. **No login** — LAN or tailnet only.
+
+Besides setups (values that later shots inherit) the UI and the MCP record
+**events**: one-off turning points such as a new WDT tool, a puck screen or a
+different basket. Every later shot belongs to that event's era, so shots
+before and after a change can be compared.
 
 ### Using it from an AI assistant
 

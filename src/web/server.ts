@@ -13,6 +13,7 @@ import { loadArchivedShot, pressureSparkline } from "../shots.js";
 import { saveProfileMerged } from "../profiles.js";
 import { statsSummary } from "../stats.js";
 import { ingestOnce } from "../ingest.js";
+import { recordEvent, updateEvent, deleteEvent, listEvents, eraOf, EVENT_KINDS } from "../events.js";
 
 /**
  * The web UI's backend: a static file server for web/ and a JSON API that is
@@ -116,8 +117,10 @@ route("GET", "/api/shots", async (_req, res, _p, url) => {
   const sql = "SELECT * FROM shot_context" + (where.length ? ` WHERE ${where.join(" AND ")}` : "") +
     " ORDER BY started_at DESC LIMIT ?";
   const shots = db.prepare(sql).all(...params, limit) as unknown as ShotContextRow[];
+  const oldest = shots.length ? shots[shots.length - 1].started_at : 0;
   json(res, 200, {
     shots: shots.map((s) => ({ ...s, sparkline: pressureSparkline(db, s.id) })),
+    events: listEvents(db, oldest),
     beans: db.prepare("SELECT DISTINCT bean FROM shot_context WHERE bean IS NOT NULL ORDER BY bean").all().map((r: any) => r.bean),
     profiles: db.prepare("SELECT DISTINCT profile_name FROM shot_context WHERE profile_name IS NOT NULL").all().map((r: any) => r.profile_name),
   });
@@ -129,7 +132,7 @@ route("GET", "/api/shots/:id", async (_req, res, p) => {
   // Neighbours, for the previous/next links and the default comparison.
   const prev = db.prepare("SELECT id FROM shots WHERE started_at < (SELECT started_at FROM shots WHERE id = ?) ORDER BY started_at DESC LIMIT 1").get(Number(p.id)) as any;
   const next = db.prepare("SELECT id FROM shots WHERE started_at > (SELECT started_at FROM shots WHERE id = ?) ORDER BY started_at ASC LIMIT 1").get(Number(p.id)) as any;
-  json(res, 200, { ...loaded, prev_id: prev?.id ?? null, next_id: next?.id ?? null });
+  json(res, 200, { ...loaded, era: eraOf(db, loaded.context.started_at), prev_id: prev?.id ?? null, next_id: next?.id ?? null });
 });
 
 route("POST", "/api/shots/:id/rating", async (req, res, p) => {
@@ -166,6 +169,30 @@ route("PATCH", "/api/setups/:id", async (req, res, p) => {
   json(res, 200, { setup });
 });
 
+route("GET", "/api/events", async (_req, res) => {
+  json(res, 200, { events: listEvents(db), kinds: EVENT_KINDS });
+});
+
+route("POST", "/api/events", async (req, res) => {
+  const body = await readJson(req);
+  try {
+    json(res, 200, { event: recordEvent(db, { ...body, at: body.at != null ? Number(body.at) : undefined }) });
+  } catch (error) {
+    json(res, 400, { error: "INVALID", message: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+route("PATCH", "/api/events/:id", async (req, res, p) => {
+  const body = await readJson(req);
+  const event = updateEvent(db, Number(p.id), { ...body, at: body.at != null ? Number(body.at) : undefined });
+  if (!event) return json(res, 404, { error: "EVENT_NOT_FOUND" });
+  json(res, 200, { event });
+});
+
+route("DELETE", "/api/events/:id", async (_req, res, p) => {
+  json(res, deleteEvent(db, Number(p.id)) ? 200 : 404, {});
+});
+
 route("GET", "/api/machine/state", async (_req, res, _p, url) => {
   const now = Math.floor(Date.now() / 1000);
   const since = Number(url.searchParams.get("since") ?? now - 24 * 3600);
@@ -176,7 +203,7 @@ route("GET", "/api/machine/state", async (_req, res, _p, url) => {
   const shots = db
     .prepare("SELECT id, started_at, ratio, machine_settledness FROM shot_context WHERE started_at BETWEEN ? AND ? ORDER BY started_at")
     .all(since, until);
-  json(res, 200, { samples, shots, sessions: powerSessions(db, since), since, until });
+  json(res, 200, { samples, shots, events: listEvents(db, since, until), sessions: powerSessions(db, since), since, until });
 });
 
 route("GET", "/api/machine/settings", async (_req, res) => {

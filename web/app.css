@@ -53,6 +53,8 @@ p { margin: 0; }
 .nav a { padding: 7px 11px; border-radius: 999px; color: var(--text-2); font-size: .9rem; white-space: nowrap; }
 .nav a.active { color: var(--text); background: var(--surface-2); }
 .nav a:hover { color: var(--text); }
+/* Narrow screens: the word mark gives way so every nav item stays reachable. */
+@media (max-width: 640px) { .brand span:last-child { display: none; } .nav a { padding: 7px 9px; font-size: .86rem; } .live { display: none; } }
 .top-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
 .live { display: inline-flex; align-items: center; gap: 6px; font-size: .78rem; color: var(--text-3); white-space: nowrap; }
 .live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); }
@@ -109,6 +111,8 @@ p { margin: 0; }
 .shot-row .nums span { display: grid; gap: 1px; }
 .shot-row .nums i { font-style: normal; font-size: .68rem; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; }
 @media (max-width: 560px) { .shot-row { grid-template-columns: 60px 1fr; } .shot-row .spark { width: 60px; } .shot-row .nums { grid-column: 1 / -1; justify-content: space-between; text-align: left; } }
+.event-row { display: flex; align-items: center; gap: 10px; padding: 8px 14px; margin: 6px 0; color: var(--text-2); font-size: .9rem;
+             border-left: 2px solid var(--accent); background: linear-gradient(90deg, rgba(217,160,102,.08), transparent 60%); border-radius: 0 var(--radius-s) var(--radius-s) 0; }
 .stars { color: var(--accent); letter-spacing: 1px; font-size: .85rem; }
 .stars .off { color: var(--line-2); }
 

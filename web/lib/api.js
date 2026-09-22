@@ -23,5 +23,9 @@ export const api = {
   profile: (id) => call("GET", `/api/profiles/${id}`),
   saveProfile: (id, spec) => call("PUT", `/api/profiles/${id}`, spec),
   stats: () => call("GET", "/api/stats"),
+  events: () => call("GET", "/api/events"),
+  recordEvent: (e) => call("POST", "/api/events", e),
+  updateEvent: (id, e) => call("PATCH", `/api/events/${id}`, e),
+  deleteEvent: (id) => call("DELETE", `/api/events/${id}`),
   ingest: () => call("POST", "/api/ingest"),
 };

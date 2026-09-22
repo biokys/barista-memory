@@ -66,6 +66,21 @@ CREATE TABLE IF NOT EXISTS setups (
   created_at    INTEGER NOT NULL
 );
 
+-- One-off changes that are not a value but a turning point: a new WDT tool,
+-- a puck screen, a different basket, a change of technique. Nothing about a
+-- shot records these, yet "every shot since" is exactly what one wants to
+-- compare. Like setups they partition the timeline; unlike setups they carry
+-- no inheritable fields, only a name.
+CREATE TABLE IF NOT EXISTS events (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  at         INTEGER NOT NULL,                  -- unix seconds
+  kind       TEXT NOT NULL,                     -- equipment | technique | maintenance | beans | other
+  title      TEXT NOT NULL,
+  note       TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS events_at ON events (at);
+
 -- Deviations for a single shot, for the rare pull that did not use the setup.
 CREATE TABLE IF NOT EXISTS shot_overrides (
   shot_id       INTEGER PRIMARY KEY REFERENCES shots (id) ON DELETE CASCADE,
@@ -132,7 +147,10 @@ SELECT
   END AS ratio,
   t.rating,
   t.note AS taste_note,
-  su.id  AS setup_id
+  su.id  AS setup_id,
+  -- The last event at or before the shot: its "era", for grouping shots by
+  -- what equipment and technique they were pulled with.
+  (SELECT id FROM events WHERE at <= s.started_at ORDER BY at DESC, id DESC LIMIT 1) AS era_event_id
 FROM shots s
 LEFT JOIN setups su
   ON su.id = (

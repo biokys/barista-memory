@@ -142,6 +142,15 @@ machine sat in brew mode with target 94 while the sensor fell 90 → 49 °C over
 an hour. Test scenarios that must keep holding: woken from 20 °C +2 min ≈ 7 %,
 from 60 °C +2 min ≈ 57 %, an hour of standby after a warm session ≈ 50 %.
 
+**The web UI and the MCP share every code path.** `src/web/server.ts` is a
+thin JSON translation of `shots.ts`, `profiles.ts`, `stats.ts`, `events.ts`,
+`setups.ts` and `machineState.ts`; the MCP calls the same functions. Put
+logic in those modules, never in a route or a tool handler, or the two will
+drift. `web/` has no build step and no framework on purpose — it is served
+straight from the checkout, with uPlot and Inter coming from `node_modules`.
+Dictionaries in `web/i18n/` must stay key-for-key identical (a one-line
+python check in the git log shows how).
+
 ## Two measurement caveats to keep repeating
 
 The **boiler sensor reaches target long before the machine does** — observed

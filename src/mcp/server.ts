@@ -7,6 +7,7 @@ import { openDatabase, currentSetup, type ShotContextRow } from "../db/db.js";
 import { fetchStatus, listProfiles, getProfile, fetchRawSettings } from "../device/client.js";
 import { loadArchivedShot } from "../shots.js";
 import { saveProfileMerged } from "../profiles.js";
+import { recordEvent, listEvents, eraOf, EVENT_KINDS } from "../events.js";
 import { groupSettings } from "../device/machineSettings.js";
 import { PHASE_ARRAY_SCHEMA } from "./profileSchema.js";
 import { recordSetup, moveSetup, updateSetup } from "../setups.js";
@@ -97,6 +98,28 @@ const TOOLS: Tool[] = [
       },
       required: ["setup_id"],
     },
+  },
+  {
+    name: "record_event",
+    description:
+      "Record a one-off turning point that is not a setup value: a new WDT tool, a puck screen, a different " +
+      "basket or portafilter, a change of technique, descaling. Every later shot belongs to its era, so shots " +
+      "before and after can be compared. Backdate with `at` when it actually happened earlier.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "e.g. 'WDT tool', 'puck screen', '18g VST basket'" },
+        kind: { type: "string", enum: [...EVENT_KINDS], description: "Default 'other'" },
+        note: { type: "string" },
+        at: { type: "number", description: "Unix seconds; defaults to now" },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "list_events",
+    description: "Turning points recorded with record_event, newest first.",
+    inputSchema: { type: "object", properties: { since: { type: "number" } } },
   },
   {
     name: "query_shots",
@@ -325,6 +348,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return ok({ setup, message: "Setup corrected; shots in that period re-derive their context" });
       }
 
+      case "record_event": {
+        try {
+          return ok({ event: recordEvent(db, args as any) });
+        } catch (error) {
+          return fail(error instanceof Error ? error.message : String(error), "INVALID");
+        }
+      }
+
+      case "list_events": {
+        const events = listEvents(db, args?.since as number | undefined);
+        return ok({ events, count: events.length });
+      }
+
       case "query_shots": {
         const where: string[] = [];
         const params: Array<string | number> = [];
@@ -353,7 +389,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "get_archived_shot": {
         const loaded = loadArchivedShot(db, args!.shot_id as number, (args?.include_full_curve as boolean) ?? false);
         if (!loaded) return fail(`Shot ${args!.shot_id} is not in the archive`, "SHOT_NOT_FOUND");
-        return ok(loaded);
+        return ok({ ...loaded, era: eraOf(db, loaded.context.started_at) });
       }
 
       case "list_profiles": {

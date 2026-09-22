@@ -26,6 +26,22 @@ export function shotRow(s) {
   </a>`;
 }
 
+/** Shots newest first, with each event dropped in where it happened. */
+function interleave(shots, events) {
+  const evs = [...events].sort((a, b) => b.at - a.at);
+  const out = []; let i = 0;
+  for (const s of shots) {
+    while (i < evs.length && evs[i].at >= s.started_at) { out.push(eventRow(evs[i])); i++; }
+    out.push(shotRow(s));
+  }
+  while (i < evs.length) out.push(eventRow(evs[i++]));
+  return out.join("");
+}
+
+function eventRow(e) {
+  return `<div class="event-row"><span class="pill accent">${t("events.kind." + e.kind)}</span><b>${e.title}</b><span class="faint small">${fmt.dateTime(e.at)}</span></div>`;
+}
+
 export async function renderHistory(view) {
   const state = { bean: "", profile: "" };
   const load = async () => {
@@ -41,7 +57,7 @@ export async function renderHistory(view) {
           <select id="f-profile" class="btn sm"><option value="">${t("history.all_profiles")}</option>${data.profiles.map((p) => `<option ${p === state.profile ? "selected" : ""}>${p}</option>`).join("")}</select>
         </div>
       </div>
-      <div class="list">${data.shots.length ? data.shots.map(shotRow).join("") : `<p class="empty">${t("history.empty")}</p>`}</div>`;
+      <div class="list">${data.shots.length ? interleave(data.shots, data.events || []) : `<p class="empty">${t("history.empty")}</p>`}</div>`;
     view.querySelector("#f-bean").onchange = (e) => { state.bean = e.target.value; load(); };
     view.querySelector("#f-profile").onchange = (e) => { state.profile = e.target.value; load(); };
   };

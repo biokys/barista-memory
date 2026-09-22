@@ -5,10 +5,35 @@ import { fmt, toast } from "../lib/fmt.js";
 const toLocalInput = (unix) => { const d = new Date(unix * 1000); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
 const fromLocalInput = (s) => Math.floor(new Date(s).getTime() / 1000);
 
+const KINDS = ["equipment", "technique", "maintenance", "beans", "other"];
+
+function eventsSection(events) {
+  return `
+      <section class="card">
+        <div class="card-head"><h2>${t("events.title")}</h2></div>
+        <p class="faint small" style="margin-bottom:12px">${t("events.hint")}</p>
+        <form class="form" id="ef">
+          <div class="grid cols-3">
+            <div class="field" style="grid-column: span 2"><label>${t("events.what")}</label><input name="title" required placeholder="${t("events.what_placeholder")}"></div>
+            <div class="field"><label>${t("events.kind")}</label><select name="kind">${KINDS.map((k) => `<option value="${k}">${t("events.kind." + k)}</option>`).join("")}</select></div>
+            <div class="field"><label>${t("events.when")}</label><input type="datetime-local" name="at" value="${toLocalInput(Math.floor(Date.now() / 1000))}"></div>
+            <div class="field" style="grid-column: span 2"><label>${t("events.note")}</label><input name="note"></div>
+          </div>
+          <div class="row"><button class="btn primary" type="submit">${t("events.add")}</button></div>
+        </form>
+        <div class="sep" style="margin:16px 0"></div>
+        <div class="timeline">${events.length ? events.map((e) => `
+          <div class="tl-item">
+            <div class="when">${fmt.dateTime(e.at)}</div>
+            <div class="row"><span class="pill">${t("events.kind." + e.kind)}</span><b>${e.title}</b>${e.note ? `<span class="faint small">${e.note}</span>` : ""}<button class="btn sm ghost" data-del-event="${e.id}" data-title="${e.title}">${t("events.delete")}</button></div>
+          </div>`).join("") : `<p class="empty">${t("events.none")}</p>`}</div>
+      </section>`;
+}
+
 export async function renderSetup(view) {
   let editing = null;
   const load = async () => {
-    const data = await api.setups();
+    const [data, evs] = await Promise.all([api.setups(), api.events()]);
     const cur = data.current;
     view.innerHTML = `
       <h1>${t("setup.title")}</h1>
@@ -57,7 +82,20 @@ export async function renderSetup(view) {
               </form>` : `
               <div class="row"><b>${s.bean ?? "–"}</b><span class="muted">${s.roaster ?? ""}</span><span class="pill num">${t("now.grind")} ${s.grind_setting ?? "–"}</span><span class="pill num">${s.dose_g ?? "–"} g</span>${s.note ? `<span class="faint small">${s.note}</span>` : ""}<button class="btn sm ghost" data-edit="${s.id}">${t("setup.edit")}</button></div>`}
           </div>`).join("")}</div>
-      </section>`;
+      </section>
+      ${eventsSection(evs.events)}`;
+
+    const ef = view.querySelector("#ef");
+    ef.onsubmit = async (e) => {
+      e.preventDefault();
+      const body = Object.fromEntries(new FormData(ef));
+      body.at = fromLocalInput(body.at);
+      try { await api.recordEvent(body); toast(t("events.saved")); load(); } catch (err) { toast(String(err.message), "bad"); }
+    };
+    view.querySelectorAll("[data-del-event]").forEach((b) => (b.onclick = async () => {
+      if (!confirm(t("events.confirm_delete", { title: b.dataset.title }))) return;
+      await api.deleteEvent(b.dataset.delEvent); toast(t("events.deleted")); load();
+    }));
 
     const f = view.querySelector("#f");
     f.grind_setting.oninput = () => (view.querySelector("#gv").textContent = f.grind_setting.value);
@@ -72,10 +110,10 @@ export async function renderSetup(view) {
     };
     view.querySelectorAll("[data-edit]").forEach((b) => (b.onclick = () => { editing = Number(b.dataset.edit); load(); }));
     view.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => { editing = null; load(); }));
-    const ef = view.querySelector("form.edit");
-    if (ef) ef.onsubmit = async (e) => {
+    const editForm = view.querySelector("form.edit");
+    if (editForm) editForm.onsubmit = async (e) => {
       e.preventDefault();
-      const change = Object.fromEntries([...new FormData(ef)]);
+      const change = Object.fromEntries([...new FormData(editForm)]);
       change.valid_from = fromLocalInput(change.valid_from);
       if (change.dose_g !== "") change.dose_g = Number(change.dose_g); else delete change.dose_g;
       await api.updateSetup(editing, change);
