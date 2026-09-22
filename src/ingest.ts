@@ -5,6 +5,7 @@ import { fetchIndex, fetchSlog, parseSlog } from "./device/client.js";
 import { stableWeight } from "./stableWeight.js";
 import { powerSessions, machineContextForShot, allStateSamples } from "./machineState.js";
 import { syncNotes } from "./notesSync.js";
+import { classifyShots, utilityProfileIds } from "./maintenance.js";
 
 
 /** The stable weight for one shot, or the raw figure if the log cannot be read. */
@@ -92,6 +93,7 @@ export interface IngestResult {
   archived: number;
   skipped: number;
   notesSynced: number;
+  classified: number;
   failures: Array<{ shotId: number; reason: string }>;
 }
 
@@ -117,6 +119,7 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
     archived: 0,
     skipped: 0,
     notesSynced: 0,
+    classified: 0,
     failures: [],
   };
 
@@ -136,6 +139,7 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
   const samples = allStateSamples(db);
 
   const fresh: number[] = [];
+  let sawNew = false;
 
   for (const entry of live) {
     if (known.has(entry.id)) {
@@ -176,12 +180,21 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
       );
       result.archived++;
       fresh.push(entry.id);
+      sawNew = true;
     } catch (error) {
       result.failures.push({
         shotId: entry.id,
         reason: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  // Flush or coffee, and how much water: asked of the machine's profile list
+  // only when there is something new to classify, so a quiet pass costs no
+  // extra request.
+  if (sawNew || db.prepare("SELECT 1 FROM shots WHERE water_ml IS NULL LIMIT 1").get()) {
+    const utility = await utilityProfileIds();
+    result.classified = classifyShots(db, utility, (slog, id) => parseSlog(slog, id).samples);
   }
 
   if (config.syncNotesToDevice) {

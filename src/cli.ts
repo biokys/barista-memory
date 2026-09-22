@@ -13,6 +13,7 @@ import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "./i
 import { fetchStatus, parseSlog } from "./device/client.js";
 import { TAU_HEAT_MIN } from "./thermalModel.js";
 import { recordEvent, listEvents } from "./events.js";
+import { maintenanceStatus, logMaintenance } from "./maintenance.js";
 import { currentConditions } from "./machineState.js";
 
 function parseArgs(argv: string[]): Record<string, string> {
@@ -48,6 +49,8 @@ function usage(): never {
       "  cli event --title T [--kind equipment|technique|maintenance|beans|other] [--note N] [--at UNIX]",
       "      Record a turning point (new WDT, puck screen, basket...). Later shots belong to its era.",
       "  cli events        List turning points",
+      "  cli maintenance   Where each cleaning routine stands",
+      "  cli maintenance-done <backflush|cafiza|descale|water_filter|gasket> [--note N] [--at UNIX]",
       "  cli stats         Print archive counts",
       "  cli recompute-weights [--all]",
       "      Re-derive the stable weight from the stored logs; --all redoes every shot.",
@@ -254,6 +257,26 @@ try {
 
     case "events": {
       for (const ev of listEvents(db)) console.log(`  #${ev.id}  ${new Date(ev.at * 1000).toISOString().slice(0, 16)}  ${ev.kind.padEnd(11)} ${ev.title}${ev.note ? "  (" + ev.note + ")" : ""}`);
+      break;
+    }
+
+    case "maintenance": {
+      for (const m of maintenanceStatus(db)) {
+        if (!m.enabled) continue;
+        const used = [
+          m.interval_shots != null ? `${m.shots_since ?? "?"}/${m.interval_shots} shots` : null,
+          m.interval_water_l != null ? `${m.water_l_since ?? "?"}/${m.interval_water_l} l` : null,
+          m.interval_days != null ? `${m.days_since ?? "?"}/${m.interval_days} days` : null,
+        ].filter(Boolean).join(", ");
+        const last = m.last_at ? new Date(m.last_at * 1000).toISOString().slice(0, 16) : "never";
+        console.log(`  ${m.key.padEnd(13)} ${m.state.padEnd(6)} ${used}  last ${last}${m.last_auto ? " (detected)" : ""}`);
+      }
+      break;
+    }
+
+    case "maintenance-done": {
+      const entry = logMaintenance(db, rest.find((a) => !a.startsWith("--")) ?? "", { note: args.note, at: args.at ? Number(args.at) : undefined });
+      console.log(`logged ${entry.type_key} at ${new Date(entry.at * 1000).toISOString().slice(0, 16)}`);
       break;
     }
 

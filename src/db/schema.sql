@@ -43,7 +43,15 @@ CREATE TABLE IF NOT EXISTS shots (
   device_rating  INTEGER,
   incomplete     INTEGER NOT NULL DEFAULT 0,
   raw_slog       BLOB,
-  ingested_at    INTEGER NOT NULL
+  ingested_at    INTEGER NOT NULL,
+  -- 'shot' or 'flush'. A backflush through the machine is recorded by the
+  -- firmware exactly like a coffee; it is told apart by the profile's utility
+  -- flag (falling back to the profile's name when the machine is unreachable).
+  -- Flushes stay archived but leave every coffee statistic.
+  kind           TEXT NOT NULL DEFAULT 'shot',
+  -- Water pumped during this run, in ml, from the flow trace. Scale runs on
+  -- water, not on coffee, so descaling is due by litres, not by shots.
+  water_ml       REAL
 );
 
 CREATE INDEX IF NOT EXISTS shots_started_at ON shots (started_at);
@@ -80,6 +88,34 @@ CREATE TABLE IF NOT EXISTS events (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS events_at ON events (at);
+
+-- Routines the machine needs and how often. Each is worn down by something
+-- different — flushes and Cafiza by coffee (shots), descaling by water
+-- (litres), a gasket by time — so a type carries whichever intervals apply and
+-- its status is *computed* from the archive, never stored. Seeded by db.ts
+-- with the usual Gaggia Classic figures; the intervals are yours to change,
+-- since water hardness and filtering vary more than machines do.
+CREATE TABLE IF NOT EXISTS maintenance_types (
+  key              TEXT PRIMARY KEY,           -- backflush | cafiza | descale | water_filter | gasket
+  sort             INTEGER NOT NULL,
+  enabled          INTEGER NOT NULL DEFAULT 1,
+  interval_shots   INTEGER,
+  interval_water_l REAL,
+  interval_days    INTEGER
+);
+
+-- When a routine was done. auto = detected from a utility-profile run rather
+-- than entered by hand; shot_id then points at that run.
+CREATE TABLE IF NOT EXISTS maintenance_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  type_key   TEXT NOT NULL REFERENCES maintenance_types (key),
+  at         INTEGER NOT NULL,
+  note       TEXT,
+  auto       INTEGER NOT NULL DEFAULT 0,
+  shot_id    INTEGER REFERENCES shots (id) ON DELETE SET NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS maintenance_log_type_at ON maintenance_log (type_key, at);
 
 -- Deviations for a single shot, for the rare pull that did not use the setup.
 CREATE TABLE IF NOT EXISTS shot_overrides (
@@ -131,6 +167,7 @@ SELECT
   s.machine_heatup_s,
   s.machine_settled,
   s.machine_settledness,
+  s.water_ml,
   s.incomplete,
   COALESCE(o.bean,          su.bean)          AS bean,
   su.roaster,
@@ -160,7 +197,8 @@ LEFT JOIN setups su
     LIMIT 1
   )
 LEFT JOIN shot_overrides o ON o.shot_id = s.id
-LEFT JOIN tastings       t ON t.shot_id = s.id;
+LEFT JOIN tastings       t ON t.shot_id = s.id
+WHERE s.kind = 'shot';
 
 -- Samples of what the machine itself is doing, which it records nowhere.
 --

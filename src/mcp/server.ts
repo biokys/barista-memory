@@ -8,6 +8,7 @@ import { fetchStatus, listProfiles, getProfile, fetchRawSettings } from "../devi
 import { loadArchivedShot } from "../shots.js";
 import { saveProfileMerged } from "../profiles.js";
 import { recordEvent, listEvents, eraOf, EVENT_KINDS } from "../events.js";
+import { maintenanceStatus, logMaintenance, listMaintenanceLog, markLastFlushAsCafiza, MAINTENANCE_KEYS } from "../maintenance.js";
 import { groupSettings } from "../device/machineSettings.js";
 import { PHASE_ARRAY_SCHEMA } from "./profileSchema.js";
 import { recordSetup, moveSetup, updateSetup } from "../setups.js";
@@ -120,6 +121,30 @@ const TOOLS: Tool[] = [
     name: "list_events",
     description: "Turning points recorded with record_event, newest first.",
     inputSchema: { type: "object", properties: { since: { type: "number" } } },
+  },
+  {
+    name: "maintenance_status",
+    description:
+      "Where each cleaning routine stands: backflush and Cafiza are worn down by coffees pulled, descaling by " +
+      "litres of water pumped. Backflushes are detected automatically from runs on the machine's utility " +
+      "profile; Cafiza and descaling must be recorded with record_maintenance. state is never|ok|soon|due.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "record_maintenance",
+    description: "Record that a routine was done just now (or at `at`). Use 'cafiza' for a chemical backflush.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        type: { type: "string", enum: [...MAINTENANCE_KEYS] },
+        note: { type: "string" },
+        at: { type: "number", description: "Unix seconds; defaults to now" },
+        last_flush_was_cafiza: {
+          type: "boolean",
+          description: "Instead of a new entry, mark the most recent auto-detected backflush as a Cafiza run",
+        },
+      },
+    },
   },
   {
     name: "query_shots",
@@ -359,6 +384,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "list_events": {
         const events = listEvents(db, args?.since as number | undefined);
         return ok({ events, count: events.length });
+      }
+
+      case "maintenance_status": {
+        return ok({ status: maintenanceStatus(db), log: listMaintenanceLog(db, 20) });
+      }
+
+      case "record_maintenance": {
+        if (args?.last_flush_was_cafiza) {
+          const entry = markLastFlushAsCafiza(db);
+          return entry ? ok({ entry, status: maintenanceStatus(db) }) : fail("No detected backflush to promote", "NO_DETECTED_FLUSH");
+        }
+        try {
+          const entry = logMaintenance(db, String(args?.type ?? ""), { note: args?.note as string | undefined, at: args?.at as number | undefined });
+          return ok({ entry, status: maintenanceStatus(db) });
+        } catch (error) {
+          return fail(error instanceof Error ? error.message : String(error), "INVALID");
+        }
       }
 
       case "query_shots": {

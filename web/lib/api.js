@@ -28,4 +28,9 @@ export const api = {
   updateEvent: (id, e) => call("PATCH", `/api/events/${id}`, e),
   deleteEvent: (id) => call("DELETE", `/api/events/${id}`),
   ingest: () => call("POST", "/api/ingest"),
+  maintenance: () => call("GET", "/api/maintenance"),
+  maintenanceDone: (key, body = {}) => call("POST", `/api/maintenance/${key}`, body),
+  lastFlushWasCafiza: () => call("POST", "/api/maintenance/last-flush/cafiza"),
+  updateMaintenanceType: (key, change) => call("PATCH", `/api/maintenance/types/${key}`, change),
+  deleteMaintenanceLog: (id) => call("DELETE", `/api/maintenance/log/${id}`),
 };

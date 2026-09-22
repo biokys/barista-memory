@@ -16,6 +16,10 @@ import { saveProfileMerged } from "../profiles.js";
 import { statsSummary } from "../stats.js";
 import { ingestOnce } from "../ingest.js";
 import { recordEvent, updateEvent, deleteEvent, listEvents, eraOf, EVENT_KINDS } from "../events.js";
+import {
+  maintenanceStatus, logMaintenance, listMaintenanceLog, deleteMaintenanceLog,
+  markLastFlushAsCafiza, updateMaintenanceType, MAINTENANCE_KEYS,
+} from "../maintenance.js";
 
 /**
  * The web UI's backend: a static file server for web/ and a JSON API that is
@@ -116,6 +120,7 @@ route("GET", "/api/now", async (_req, res) => {
   json(res, 200, {
     machine: conditions,
     setup,
+    maintenance: maintenanceStatus(db).filter((m) => m.enabled),
     last_shot: last ? { ...last, sparkline: pressureSparkline(db, last.id) } : null,
     server_time: Math.floor(Date.now() / 1000),
   });
@@ -140,6 +145,7 @@ route("GET", "/api/shots", async (_req, res, _p, url) => {
   json(res, 200, {
     shots: shots.map((s) => ({ ...s, sparkline: pressureSparkline(db, s.id) })),
     events: listEvents(db, oldest),
+    maintenance: listMaintenanceLog(db, 500).filter((m) => m.at >= oldest),
     beans: db.prepare("SELECT DISTINCT bean FROM shot_context WHERE bean IS NOT NULL ORDER BY bean").all().map((r: any) => r.bean),
     profiles: db.prepare("SELECT DISTINCT profile_name FROM shot_context WHERE profile_name IS NOT NULL").all().map((r: any) => r.profile_name),
   });
@@ -210,6 +216,50 @@ route("PATCH", "/api/events/:id", async (req, res, p) => {
 
 route("DELETE", "/api/events/:id", async (_req, res, p) => {
   json(res, deleteEvent(db, Number(p.id)) ? 200 : 404, {});
+});
+
+route("GET", "/api/maintenance", async (_req, res) => {
+  json(res, 200, {
+    status: maintenanceStatus(db),
+    log: listMaintenanceLog(db),
+    types: db.prepare("SELECT * FROM maintenance_types ORDER BY sort").all(),
+    keys: MAINTENANCE_KEYS,
+  });
+});
+
+route("POST", "/api/maintenance/:key", async (req, res, p) => {
+  const body = await readJson(req);
+  try {
+    const entry = logMaintenance(db, p.key, { note: body.note, at: body.at != null ? Number(body.at) : undefined });
+    json(res, 200, { entry, status: maintenanceStatus(db) });
+  } catch (error) {
+    json(res, 400, { error: "INVALID", message: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// The machine cannot tell a plain flush from one with Cafiza; this promotes
+// the last detected flush after the fact.
+route("POST", "/api/maintenance/last-flush/cafiza", async (_req, res) => {
+  const entry = markLastFlushAsCafiza(db);
+  if (!entry) return json(res, 404, { error: "NO_DETECTED_FLUSH" });
+  json(res, 200, { entry, status: maintenanceStatus(db) });
+});
+
+route("PATCH", "/api/maintenance/types/:key", async (req, res, p) => {
+  const body = await readJson(req);
+  const num = (v: unknown) => (v === null || v === "" ? null : v === undefined ? undefined : Number(v));
+  const type = updateMaintenanceType(db, p.key, {
+    enabled: body.enabled === undefined ? undefined : body.enabled ? 1 : 0,
+    interval_shots: num(body.interval_shots),
+    interval_water_l: num(body.interval_water_l),
+    interval_days: num(body.interval_days),
+  });
+  if (!type) return json(res, 404, { error: "TYPE_NOT_FOUND" });
+  json(res, 200, { type, status: maintenanceStatus(db) });
+});
+
+route("DELETE", "/api/maintenance/log/:id", async (_req, res, p) => {
+  json(res, deleteMaintenanceLog(db, Number(p.id)) ? 200 : 404, {});
 });
 
 route("GET", "/api/machine/state", async (_req, res, _p, url) => {

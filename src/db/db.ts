@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** Bump when a migration is added below. */
-const SCHEMA_VERSION = 6;
+const SCHEMA_VERSION = 7;
 
 /**
  * Changes that CREATE ... IF NOT EXISTS cannot make on their own.
@@ -19,7 +19,7 @@ const SCHEMA_VERSION = 6;
 function migrate(db: DatabaseSync, from: number): void {
   // Version 2 only adds machine_state, which CREATE TABLE IF NOT EXISTS
   // handles on its own; no step is needed here.
-  if (from < 6) {
+  if (from < 7) {
     // Columns on an existing table, and a view that exposes them. Backfilling
     // is left to the recompute functions in ingest.ts, which need the parser
     // and the session logic and so do not belong in the storage layer.
@@ -33,6 +33,8 @@ function migrate(db: DatabaseSync, from: number): void {
       ["machine_heatup_s", "INTEGER"],
       ["machine_settled", "INTEGER"],
       ["machine_settledness", "INTEGER"],
+      ["kind", "TEXT NOT NULL DEFAULT 'shot'"],
+      ["water_ml", "REAL"],
     ];
     if (names.size > 0) {
       for (const [name, type] of wanted) {
@@ -80,6 +82,24 @@ function migrate(db: DatabaseSync, from: number): void {
 }
 
 /**
+ * The routines a Gaggia Classic needs, with the intervals usually quoted for
+ * it. Inserted only when missing, so a changed interval is never overwritten.
+ * Descaling and the water filter are by litres because scale comes from water,
+ * not coffee; the gasket is by time. The filter starts disabled — not everyone
+ * has one.
+ */
+function seedMaintenanceTypes(db: DatabaseSync): void {
+  const insert = db.prepare(
+    "INSERT OR IGNORE INTO maintenance_types (key, sort, enabled, interval_shots, interval_water_l, interval_days) VALUES (?, ?, ?, ?, ?, ?)"
+  );
+  insert.run("backflush", 1, 1, 15, null, null);
+  insert.run("cafiza", 2, 1, 60, null, null);
+  insert.run("descale", 3, 1, null, 40, null);
+  insert.run("water_filter", 4, 0, null, 100, null);
+  insert.run("gasket", 5, 0, null, null, 180);
+}
+
+/**
  * Open the archive, migrating and applying the schema.
  *
  * The schema is written entirely with IF NOT EXISTS, so it creates whatever is
@@ -97,6 +117,7 @@ export function openDatabase(path: string): DatabaseSync {
 
   const schema = readFileSync(join(here, "schema.sql"), "utf8");
   db.exec(schema);
+  seedMaintenanceTypes(db);
 
   if (current < SCHEMA_VERSION) {
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
@@ -131,6 +152,7 @@ export interface ShotContextRow {
   machine_heatup_s: number | null;
   machine_settled: number | null;
   machine_settledness: number | null;
+  water_ml: number | null;
   incomplete: number;
   bean: string | null;
   roaster: string | null;

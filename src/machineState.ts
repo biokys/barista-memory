@@ -169,7 +169,7 @@ export function powerSessions(db: DatabaseSync, sinceS?: number, gapS = HEARTBEA
   flush(true);
 
   const countShots = db.prepare(
-    "SELECT COUNT(*) AS n FROM shots WHERE started_at >= ? AND started_at <= ?"
+    "SELECT COUNT(*) AS n FROM shots WHERE kind = 'shot' AND started_at >= ? AND started_at <= ?"
   );
   for (const session of sessions) {
     const { n } = countShots.get(session.started_at, session.ended_at ?? Math.floor(Date.now() / 1000)) as {

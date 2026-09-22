@@ -164,6 +164,27 @@ tr:last-child td { border-bottom: none; }
 td.r, th.r { text-align: right; }
 
 /* ---- timeline ---- */
+.maint-strip { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; text-decoration: none; color: inherit; }
+.maint-chip { display: inline-flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-radius: 999px; font-size: .84rem;
+  border: 1px solid var(--line-2); background-color: var(--surface-2); color: var(--text-2); }
+.maint-chip b { font-weight: 560; color: var(--text); }
+.maint-chip.warn { border-color: color-mix(in oklab, var(--warn) 45%, transparent); }
+.maint-chip.bad { border-color: var(--bad); color: var(--bad); }
+.maint-chip.bad b { color: var(--bad); }
+.maint-list { display: grid; gap: 14px; }
+.maint-row { padding: 12px 14px; border: 1px solid var(--line-2); border-radius: var(--radius-s); background-color: var(--surface-2); }
+.maint-row.bad { border-color: color-mix(in oklab, var(--bad) 55%, transparent); }
+.maint-row.warn { border-color: color-mix(in oklab, var(--warn) 45%, transparent); }
+.maint-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.maint-gauge { margin-bottom: 8px; }
+.maint-row.bad .gauge i { background: var(--bad); }
+.maint-row.warn .gauge i { background: var(--warn); }
+.maint-settings { margin-top: 18px; }
+.maint-settings summary { cursor: pointer; color: var(--text-2); font-size: .9rem; }
+.maint-type-row { padding: 10px 0; border-top: 1px solid var(--line-2); display: grid; gap: 6px; }
+.maint-type-row p { margin: 0; }
+.maint-interval { display: inline-flex; align-items: center; gap: 8px; font-size: .84rem; color: var(--text-3); }
+.maint-interval input { width: 5.5em; padding: 6px 8px; }
 .timeline { display: grid; gap: 0; position: relative; padding-left: 18px; }
 .timeline:empty::before { display: none; }
 .timeline::before { content: ""; position: absolute; left: 5px; top: 8px; bottom: 8px; width: 1px; background: var(--line-2); }

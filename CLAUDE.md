@@ -126,6 +126,16 @@ afternoon wake-up. The per-shot result is stored on `shots` as
 `machine_settled` so it can be correlated in plain SQL; NULL means the state
 record started after the shot, never "cold".
 
+**A backflush is a shot to the firmware.** A run on a utility profile lands in
+the shot index and gets a `.slog` like any coffee. Ingest classifies it as
+`kind = 'flush'` from the machine's profile list (utility flag; the profile
+name is only the fallback when the machine cannot be asked) and the
+`shot_context` view filters on `kind = 'shot'`, so every statistic, the
+history and notes sync see coffees only. Flush runs are still archived and
+each one becomes an automatic `maintenance_log` entry. Maintenance status is
+computed from the log and the archive on every read — nothing about "due" is
+stored, so a changed interval or a backdated entry applies at once.
+
 **Notes sync compares a fingerprint before touching the machine.** `notes_sync`
 stores the archive-side inputs each push was built from; a pass where they are
 unchanged opens no WebSocket. Before that, every pass cost one connection per
@@ -178,6 +188,8 @@ npm run cli -- show      # what context is in force
 npm run cli -- ingest    # one archive pass
 npm run cli -- recompute-weights [--all]   # re-derive stable weights from stored logs
 npm run cli -- recompute-context [--all]   # re-derive machine warm-up context
+npm run cli -- maintenance               # where each cleaning routine stands
+npm run cli -- maintenance-done cafiza   # log a routine (backflush|cafiza|descale|water_filter|gasket)
 npm run cli -- calibrate                   # bloom temperature vs. settledness, to tune TAU_HEAT
 ./scripts/archive.sh show|stats|ingest|set-setup|fix-setup|recompute|recompute-context   # same, against the Pi
 ```

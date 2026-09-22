@@ -26,16 +26,23 @@ export function shotRow(s) {
   </a>`;
 }
 
-/** Shots newest first, with each event dropped in where it happened. */
-function interleave(shots, events) {
-  const evs = [...events].sort((a, b) => b.at - a.at);
+/** Shots newest first, with each event and maintenance entry dropped in where it happened. */
+function interleave(shots, events, maintenance) {
+  const evs = [
+    ...events.map((e) => ({ at: e.at, html: eventRow(e) })),
+    ...maintenance.map((m) => ({ at: m.at, html: maintRow(m) })),
+  ].sort((a, b) => b.at - a.at);
   const out = []; let i = 0;
   for (const s of shots) {
-    while (i < evs.length && evs[i].at >= s.started_at) { out.push(eventRow(evs[i])); i++; }
+    while (i < evs.length && evs[i].at >= s.started_at) { out.push(evs[i].html); i++; }
     out.push(shotRow(s));
   }
-  while (i < evs.length) out.push(eventRow(evs[i++]));
+  while (i < evs.length) out.push(evs[i++].html);
   return out.join("");
+}
+
+function maintRow(m) {
+  return `<div class="event-row"><span class="pill">${t("maint.type." + m.type_key)}</span><span class="muted">${m.auto ? t("maint.detected") : (m.note || "")}</span><span class="faint small">${fmt.dateTime(m.at)}</span></div>`;
 }
 
 function eventRow(e) {
@@ -57,7 +64,7 @@ export async function renderHistory(view) {
           <select id="f-profile" class="btn sm"><option value="">${t("history.all_profiles")}</option>${data.profiles.map((p) => `<option ${p === state.profile ? "selected" : ""}>${p}</option>`).join("")}</select>
         </div>
       </div>
-      <div class="list">${data.shots.length ? interleave(data.shots, data.events || []) : `<p class="empty">${t("history.empty")}</p>`}</div>`;
+      <div class="list">${data.shots.length ? interleave(data.shots, data.events || [], data.maintenance || []) : `<p class="empty">${t("history.empty")}</p>`}</div>`;
     view.querySelector("#f-bean").onchange = (e) => { state.bean = e.target.value; load(); };
     view.querySelector("#f-profile").onchange = (e) => { state.profile = e.target.value; load(); };
   };

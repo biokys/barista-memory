@@ -68,6 +68,7 @@ src/
   mcp/profileSchema.ts   phase schema for save_profile, mirrors the firmware
   device/machineSettings.ts  allowlist for /api/settings (it leaks passwords)
   events.ts              turning points (new tool, technique change) and eras
+  maintenance.ts         cleaning routines: intervals, log, flush detection
   web/server.ts          JSON API + static files for the web UI
   cli.ts                 same operations without an MCP client
 web/                     the UI: no build step, ES modules, uPlot, Inter
@@ -186,6 +187,18 @@ Besides setups (values that later shots inherit) the UI and the MCP record
 different basket. Every later shot belongs to that event's era, so shots
 before and after a change can be compared.
 
+The same screen tracks **maintenance**. Each routine is worn down by
+something different, so each is measured in its own unit: backflush and Cafiza
+by coffees pulled, descaling (and an optional water filter) by litres of water
+the pump moved, the group gasket by days. A backflush is recognised on its own:
+the firmware records a run on a utility profile exactly like a coffee, so the
+archive marks such runs as `kind = 'flush'`, keeps them out of every coffee
+statistic and logs them as a backflush. The machine cannot see whether Cafiza
+was in the basket, so one button promotes the last detected flush to a Cafiza
+run. Status is computed from the log and the archive, never stored, and the
+intervals are yours to change. The home page shows one chip per routine, red
+only when overdue.
+
 ### Using it from an AI assistant
 
 `src/mcp/server.ts` is an MCP server over stdio. It reads and writes the
@@ -204,12 +217,14 @@ claude mcp add barista-memory -- ssh user@pi \
   'cd ~/barista-memory && GAGGIMATE_HOST=… GAGGIMATE_DB=… node --no-warnings dist/mcp/server.js'
 ```
 
-Nineteen tools: the archive (`query_shots`, `get_archived_shot`, `rate_shot`),
-brewing context (`get_current_setup`, `set_current_setup`, `move_setup`,
-`update_setup`), the machine (`machine_now`, `machine_timeline`,
-`machine_temperature_history`, `get_machine_settings`, `list_profiles`,
-`get_profile`, `save_profile`) and maintenance (`ingest_now`,
-`recompute_stable_weights`, `recompute_machine_context`).
+The tools cover the archive (`query_shots`, `get_archived_shot`, `rate_shot`,
+`set_shot_override`), brewing context (`get_current_setup`,
+`set_current_setup`, `list_setups`, `move_setup`, `update_setup`), turning
+points (`record_event`, `list_events`), machine cleaning
+(`maintenance_status`, `record_maintenance`), the machine (`machine_now`,
+`machine_timeline`, `machine_temperature_history`, `get_machine_settings`,
+`list_profiles`, `get_profile`, `save_profile`) and the archive's own upkeep
+(`ingest_now`, `recompute_stable_weights`, `recompute_machine_context`).
 
 ### Day to day, from a laptop
 

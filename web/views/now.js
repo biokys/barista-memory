@@ -1,6 +1,7 @@
 import { t } from "../lib/i18n.js";
 import { api } from "../lib/api.js";
 import { fmt, sparkline } from "../lib/fmt.js";
+import { usage, tone } from "../lib/maintenance.js";
 
 function stateLabel(m) {
   if (!m.reachable) return t("machine.off");
@@ -51,6 +52,10 @@ export async function renderNow(view) {
           ` : `<p class="muted">${t("now.no_setup")}</p>`}
         </section>
       </div>
+      ${(now.maintenance || []).length ? `
+      <a class="maint-strip" href="#/events">
+        ${now.maintenance.map((m) => `<span class="maint-chip ${tone(m)}"><b>${t("maint.type." + m.key)}</b><span class="num">${usage(m)}</span></span>`).join("")}
+      </a>` : ""}
       <section class="card">
         <div class="card-head"><h2>${t("now.last_shot")}</h2>${last ? `<a class="btn sm ghost" href="#/shots/${last.id}">${t("now.open")}</a>` : ""}</div>
         ${last ? `
