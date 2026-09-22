@@ -8,6 +8,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { config } from "./config.js";
 import { loadArchivedShot } from "./shots.js";
 import { maintenanceStatus } from "./maintenance.js";
+import { getSetting } from "./settings.js";
 
 /**
  * A receipt for one shot, as a 384 px wide image: what a cat-printer class
@@ -171,6 +172,30 @@ async function qr(svg: Svg, url: string) {
   svg.y = y0 + side + 10;
 }
 
+/** What the receipt says about the place; all optional, all from the UI. */
+export interface ReceiptOptions {
+  cafe_name: string;
+  cafe_tagline: string;
+  thanks: string;
+  /** Own greeting lines; empty = the built-in list for the language. */
+  greetings: string[];
+  web_url: string;
+  show_chart: boolean;
+  show_qr: boolean;
+}
+
+export function receiptOptions(db: DatabaseSync): ReceiptOptions {
+  return {
+    cafe_name: getSetting(db, "cafe_name", ""),
+    cafe_tagline: getSetting(db, "cafe_tagline", ""),
+    thanks: getSetting(db, "receipt_thanks", ""),
+    greetings: getSetting(db, "receipt_greetings", "").split("\n").map((l) => l.trim()).filter(Boolean),
+    web_url: getSetting(db, "web_url", config.webUrl).replace(/\/$/, ""),
+    show_chart: getSetting(db, "receipt_chart", "1") === "1",
+    show_qr: getSetting(db, "receipt_qr", "1") === "1",
+  };
+}
+
 export interface Receipt {
   svg: string;
   png: Uint8Array;
@@ -202,13 +227,22 @@ export async function renderShotReceipt(db: DatabaseSync, shotId: number, lang: 
   if (!loaded) return null;
   const { context: c, shot } = loaded;
   const t = T[lang];
+  const o = receiptOptions(db);
   const locale = lang === "cs" ? "cs-CZ" : "en-GB";
   const svg = new Svg();
 
   svg.y = 4;
   cup(svg, RECEIPT_WIDTH / 2, svg.y);
   svg.y += 104;
-  svg.text(RECEIPT_WIDTH / 2, svg.y, `${t.title} #${c.id}`, 30, { weight: 600, anchor: "middle" });
+  if (o.cafe_name) {
+    // The café's name is the headline; the shot number moves under it.
+    svg.text(RECEIPT_WIDTH / 2, svg.y, o.cafe_name, o.cafe_name.length > 16 ? 24 : 30, { weight: 600, anchor: "middle" });
+    if (o.cafe_tagline) { svg.y += 20; svg.text(RECEIPT_WIDTH / 2, svg.y, o.cafe_tagline, 14, { anchor: "middle" }); }
+    svg.y += 26;
+    svg.text(RECEIPT_WIDTH / 2, svg.y, `${t.title} #${c.id}`, 20, { weight: 600, anchor: "middle" });
+  } else {
+    svg.text(RECEIPT_WIDTH / 2, svg.y, `${t.title} #${c.id}`, 30, { weight: 600, anchor: "middle" });
+  }
   svg.y += 22;
   const when = new Date(c.started_at * 1000);
   svg.text(RECEIPT_WIDTH / 2, svg.y, `${when.toLocaleDateString(locale, { weekday: "short", day: "numeric", month: "long" })} · ${when.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" })}`, 15, { anchor: "middle" });
@@ -252,7 +286,7 @@ export async function renderShotReceipt(db: DatabaseSync, shotId: number, lang: 
 
   const curve = curveAll;
   const phases = (shot.phases ?? []) as Array<{ name: string; start_time_seconds: number }>;
-  if (curve.length >= 2) { svg.rule(); chart(svg, curve, phases, t); }
+  if (o.show_chart && curve.length >= 2) { svg.rule(); chart(svg, curve, phases, t); }
 
   stars(svg, c.rating ?? null);
 
@@ -260,23 +294,24 @@ export async function renderShotReceipt(db: DatabaseSync, shotId: number, lang: 
   if (due.length) { svg.rule(); svg.centered(`${t.due} ${due.map((m) => t[m.key] ?? m.key).join(", ")}`, 15, 600); }
 
   svg.rule();
-  const greetings = GREETINGS[lang];
+  const greetings = o.greetings.length ? o.greetings : GREETINGS[lang];
   svg.centered(greetings[c.id % greetings.length], 16);
   svg.y += 4;
-  svg.centered(t.thanks, 19, 600);
-  if (config.webUrl) await qr(svg, `${config.webUrl}/#/shots/${c.id}`);
+  svg.centered(o.thanks || t.thanks, 19, 600);
+  if (o.show_qr && o.web_url) await qr(svg, `${o.web_url}/#/shots/${c.id}`);
   svg.y += 12;
 
   return rasterise(svg.render());
 }
 
 /** A short strip to check the printer without a shot. */
-export async function renderTestReceipt(lang: "cs" | "en" = config.lang): Promise<Receipt> {
+export async function renderTestReceipt(lang: "cs" | "en" = config.lang, db?: DatabaseSync): Promise<Receipt> {
+  const name = db ? receiptOptions(db).cafe_name : "";
   const svg = new Svg();
   svg.y = 4;
   cup(svg, RECEIPT_WIDTH / 2, svg.y);
   svg.y += 104;
-  svg.text(RECEIPT_WIDTH / 2, svg.y, "barista-memory", 26, { weight: 600, anchor: "middle" });
+  svg.text(RECEIPT_WIDTH / 2, svg.y, name || "barista-memory", 26, { weight: 600, anchor: "middle" });
   svg.y += 24;
   svg.text(RECEIPT_WIDTH / 2, svg.y, `${T[lang].test} · ${new Date().toLocaleString(lang === "cs" ? "cs-CZ" : "en-GB")}`, 14, { anchor: "middle" });
   svg.y += 12;

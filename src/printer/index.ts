@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { config } from "../config.js";
 import { getSetting, setSetting } from "../settings.js";
-import { renderShotReceipt, renderTestReceipt, type Receipt } from "../receipt.js";
+import { renderShotReceipt, renderTestReceipt, receiptOptions, type Receipt, type ReceiptOptions } from "../receipt.js";
 import { connect, scan, bluetoothAvailable, type FoundDevice } from "./bluez.js";
 import { Mxw01, packRows, CONTROL_UUID, DATA_UUID, NOTIFY_UUID, DEFAULT_INTENSITY, type PrinterStatus } from "./mxw01.js";
 
@@ -17,6 +17,7 @@ export interface PrinterSettings {
   print_each_shot: boolean;
   intensity: number;
   lang: "cs" | "en";
+  receipt: ReceiptOptions;
 }
 
 export function printerSettings(db: DatabaseSync): PrinterSettings {
@@ -25,10 +26,24 @@ export function printerSettings(db: DatabaseSync): PrinterSettings {
     print_each_shot: getSetting(db, "print_each_shot", "0") === "1",
     intensity: Number(getSetting(db, "print_intensity", String(DEFAULT_INTENSITY))),
     lang: (getSetting(db, "receipt_lang", config.lang) === "cs" ? "cs" : "en"),
+    receipt: receiptOptions(db),
   };
 }
 
-export function updatePrinterSettings(db: DatabaseSync, change: Partial<{ mac: string | null; print_each_shot: boolean; intensity: number; lang: string }>): PrinterSettings {
+type SettingsChange = Partial<{
+  mac: string | null; print_each_shot: boolean; intensity: number; lang: string;
+  cafe_name: string; cafe_tagline: string; thanks: string; greetings: string; web_url: string; show_chart: boolean; show_qr: boolean;
+}>;
+
+export function updatePrinterSettings(db: DatabaseSync, change: SettingsChange): PrinterSettings {
+  const text = (key: string, value: string | undefined) => { if (value !== undefined) setSetting(db, key, value.trim() || null); };
+  text("cafe_name", change.cafe_name);
+  text("cafe_tagline", change.cafe_tagline);
+  text("receipt_thanks", change.thanks);
+  text("receipt_greetings", change.greetings);
+  text("web_url", change.web_url);
+  if (change.show_chart !== undefined) setSetting(db, "receipt_chart", change.show_chart ? "1" : "0");
+  if (change.show_qr !== undefined) setSetting(db, "receipt_qr", change.show_qr ? "1" : "0");
   if (change.mac !== undefined) setSetting(db, "printer_mac", change.mac ? change.mac.trim().toUpperCase() : null);
   if (change.print_each_shot !== undefined) setSetting(db, "print_each_shot", change.print_each_shot ? "1" : "0");
   if (change.intensity !== undefined) setSetting(db, "print_intensity", String(Math.max(0, Math.min(255, Math.round(change.intensity)))));
@@ -83,7 +98,7 @@ export async function printShot(db: DatabaseSync, shotId: number): Promise<Print
 }
 
 export async function printTest(db: DatabaseSync): Promise<PrintResult> {
-  return printReceipt(db, await renderTestReceipt(printerSettings(db).lang));
+  return printReceipt(db, await renderTestReceipt(printerSettings(db).lang, db));
 }
 
 export async function printerStatus(db: DatabaseSync): Promise<{ ok: true; status: PrinterStatus } | { ok: false; code: string; message: string }> {

@@ -273,5 +273,17 @@
   "scale.none": "Stroj nemá připojenou váhu.",
   "scale.no_candidates": "Žádné nalezené váhy. Zapni váhu a klikni na Hledat.",
   "scale.connect": "Připojit",
-  "scale.connecting": "Připojuji…"
+  "scale.connecting": "Připojuji…",
+  "receipt.title": "Účtenka",
+  "receipt.cafe_name": "Název kavárny",
+  "receipt.cafe_tagline": "Podtitul",
+  "receipt.cafe_tagline_ph": "domácí espresso bar",
+  "receipt.thanks": "Poděkování na konci",
+  "receipt.thanks_ph": "Děkujeme za návštěvu!",
+  "receipt.greetings": "Vlastní hlášky (jedna na řádek; prázdné = vestavěné)",
+  "receipt.greetings_ph": "Život je příliš krátký na špatné espresso.",
+  "receipt.web_url": "Adresa webu pro QR kód",
+  "receipt.show_chart": "Graf",
+  "receipt.show_qr": "QR kód",
+  "receipt.preview": "Náhled poslední účtenky"
 }

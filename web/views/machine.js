@@ -10,13 +10,16 @@ export async function renderMachine(view) {
   let destroy = null;
   const load = async () => {
     const now = Math.floor(Date.now() / 1000);
-    const [state, settings, printer, scales] = await Promise.all([
+    const [state, settings, printer, scales, latest] = await Promise.all([
       api.machineState(now - RANGES[range], now),
       api.machineSettings().catch(() => null),
       api.printer().catch(() => null),
       api.scales().catch(() => null),
+      api.shots({ limit: 1 }).catch(() => ({ shots: [] })),
     ]);
     const ps = printer?.settings;
+    const rc = ps?.receipt;
+    const lastId = latest.shots?.[0]?.id ?? null;
     view.innerHTML = `
       <div class="row spread"><h1>${t("machine.title")}</h1>
         <div class="row">${Object.keys(RANGES).map((k) => `<button class="btn sm ${k === range ? "primary" : "ghost"}" data-r="${k}">${t("machine.range." + k)}</button>`).join("")}</div></div>
@@ -71,7 +74,47 @@ export async function renderMachine(view) {
             </div>
           ` : `<p class="muted">${t("printer.unavailable")}</p>`}
         </section>
-      </div>`;
+      </div>
+      ${rc ? `
+      <div class="grid cols-2">
+        <section class="card">
+          <div class="card-head"><h2>${t("receipt.title")}</h2></div>
+          <div class="form">
+            <div class="grid cols-2">
+              <div class="field"><label>${t("receipt.cafe_name")}</label><input id="rc-name" value="${rc.cafe_name}" placeholder="Café Honza"></div>
+              <div class="field"><label>${t("receipt.cafe_tagline")}</label><input id="rc-tagline" value="${rc.cafe_tagline}" placeholder="${t("receipt.cafe_tagline_ph")}"></div>
+            </div>
+            <div class="field"><label>${t("receipt.thanks")}</label><input id="rc-thanks" value="${rc.thanks}" placeholder="${t("receipt.thanks_ph")}"></div>
+            <div class="field"><label>${t("receipt.greetings")}</label><textarea id="rc-greetings" rows="4" placeholder="${t("receipt.greetings_ph")}">${rc.greetings.join("\n")}</textarea></div>
+            <div class="field"><label>${t("receipt.web_url")}</label><input id="rc-url" value="${rc.web_url}" placeholder="http://192.168.1.20:8080"></div>
+            <div class="row">
+              <label class="row"><input type="checkbox" id="rc-chart" ${rc.show_chart ? "checked" : ""}> ${t("receipt.show_chart")}</label>
+              <label class="row"><input type="checkbox" id="rc-qr" ${rc.show_qr ? "checked" : ""}> ${t("receipt.show_qr")}</label>
+            </div>
+            <div class="row"><button class="btn primary sm" id="rc-save">${t("printer.save")}</button></div>
+          </div>
+        </section>
+        <section class="card">
+          <div class="card-head"><h2>${t("receipt.preview")}</h2>${lastId ? `<a class="btn sm ghost" href="api/shots/${lastId}/receipt.png" target="_blank" rel="noopener">PNG</a>` : ""}</div>
+          ${lastId ? `<img id="rc-preview" class="receipt-preview" src="api/shots/${lastId}/receipt.png?ts=${Date.now()}" alt="">` : `<p class="empty">${t("now.none")}</p>`}
+        </section>
+      </div>` : ""}`;
+    view.querySelector("#rc-save")?.addEventListener("click", async () => {
+      try {
+        await api.updatePrinter({
+          cafe_name: view.querySelector("#rc-name").value,
+          cafe_tagline: view.querySelector("#rc-tagline").value,
+          thanks: view.querySelector("#rc-thanks").value,
+          greetings: view.querySelector("#rc-greetings").value,
+          web_url: view.querySelector("#rc-url").value,
+          show_chart: view.querySelector("#rc-chart").checked,
+          show_qr: view.querySelector("#rc-qr").checked,
+        });
+        toast(t("printer.saved"));
+        const img = view.querySelector("#rc-preview");
+        if (img) img.src = img.src.replace(/\?ts=\d+/, "?ts=" + Date.now());
+      } catch (err) { toast(String(err.message), "bad"); }
+    });
     view.querySelector("#scale-scan")?.addEventListener("click", async () => {
       try { await api.scanScales(); toast(t("scale.scanning")); setTimeout(load, 6000); } catch (err) { toast(String(err.message), "bad"); }
     });
