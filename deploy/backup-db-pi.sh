@@ -9,7 +9,7 @@
 # BACKUP_KEEP daily copies on the remote.
 set -euo pipefail
 
-DB="${GAGGIMATE_DB:-$HOME/gaggimate-archive/data/archive.db}"
+DB="${GAGGIMATE_DB:-$HOME/barista-memory/data/archive.db}"
 # A *relative* remote path, resolved by the remote's shell against its own
 # home. Never write "~" here: the local shell expands it to THIS user's home
 # before the value ever reaches the other machine.
