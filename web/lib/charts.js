@@ -51,6 +51,15 @@ function responsive(plot, container) {
   return () => { ro.disconnect(); plot.destroy(); container.querySelector(".readout")?.remove(); };
 }
 
+/** Extend the first and last non-null values to the ends of the series. */
+function holdEdges(values) {
+  const first = values.findIndex((v) => v != null);
+  if (first < 0) return values;
+  let last = values.length - 1;
+  while (last > first && values[last] == null) last--;
+  return values.map((v, i) => (i < first ? values[first] : i > last ? values[last] : v));
+}
+
 /**
  * Shot curves: pressure + flow on the left axis (bar / ml·s share a 0–12
  * range naturally), temperature on the right, weight on a third hidden scale.
@@ -68,7 +77,10 @@ export function shotChart(container, shot, compare = null, { stableWeight = null
     pts.map((p) => p.temperature_c),
     // Cleaned weight: null before the self-tare and where the scale glitched,
     // so the green line neither starts at 180 g nor dives when the cup is lifted.
-    pts.map((p) => (p.weight_clean_g === undefined ? p.weight_g : p.weight_clean_g)),
+    // The edges are held out to the ends of the shot — the first good reading
+    // back to 0 s, the last one to the cut-off — so the line does not simply
+    // stop short; interior gaps are spanned by the series itself.
+    holdEdges(pts.map((p) => (p.weight_clean_g === undefined ? p.weight_g : p.weight_clean_g))),
   ];
   const series = [
     {},
