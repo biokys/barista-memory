@@ -208,6 +208,19 @@ of the web UI (ingress) and the archive in Home Assistant's backups.
    start it.
 3. It appears in the sidebar.
 
+### Home Assistant entities over MQTT
+
+Set `GAGGIMATE_MQTT_URL` (plus user and password if the broker wants them)
+and the daemon publishes a retained state message and Home Assistant
+discovery messages, so a **Barista Memory** device appears on its own with
+warm-up percent, a *Machine ready* binary sensor (on once the warm-up model
+says the group is hot, 85 % by default with hysteresis), boiler and target
+temperature, the mode as a sensor and as a select that switches the machine,
+the last shot with its context as attributes, and whether maintenance is due.
+"Tell me when the machine is ready" is then a one-trigger automation. The
+add-on takes the Mosquitto add-on's credentials from the Supervisor, so
+there nothing needs configuring.
+
 ### The web UI
 
 `npm run web` serves a dark, phone-first interface on port 8080 (`GAGGIMATE_WEB_PORT`):
