@@ -137,3 +137,72 @@ export async function saveNotes(shotId: number, notes: DeviceNotes): Promise<boo
   );
   return result === true;
 }
+
+// ---------------------------------------------------------------------------
+// Profiles and settings — the parts of the machine this archive can *change*.
+// Everything above only reads; these are the two write paths, and the one
+// settings read that needs a credential filter.
+// ---------------------------------------------------------------------------
+
+export interface ProfilePhase {
+  name: string;
+  phase: "preinfusion" | "brew";
+  valve: 0 | 1;
+  duration: number;
+  temperature: number;
+  transition: { type: string; duration: number; target?: string; adaptive?: boolean };
+  pump: { target: "pressure" | "flow"; pressure: number; flow: number };
+  targets: Array<{ type: string; operator?: string; value: number }>;
+}
+
+export interface Profile {
+  id: string;
+  label: string;
+  type: string;
+  description?: string;
+  temperature: number;
+  favorite: boolean;
+  selected: boolean;
+  utility: boolean;
+  phases: ProfilePhase[];
+}
+
+export async function listProfiles(): Promise<Profile[] | null> {
+  return wsRequest({ tp: "req:profiles:list" }, "res:profiles:list", (msg) => (msg.profiles ?? []) as Profile[]);
+}
+
+export async function getProfile(profileId: string): Promise<Profile | null> {
+  return wsRequest(
+    { tp: "req:profiles:load", id: profileId },
+    "res:profiles:load",
+    (msg) => (msg.profile ?? null) as Profile | null
+  );
+}
+
+/**
+ * Save a profile. The machine treats the payload as the whole profile, so the
+ * caller must send a complete object — see saveProfileTool in the MCP, which
+ * merges the caller's changes onto the existing profile first.
+ */
+export async function saveProfile(profile: Profile): Promise<{ ok: true; profile: Profile } | { ok: false; error: string }> {
+  const result = await wsRequest<{ ok: true; profile: Profile } | { ok: false; error: string }>(
+    { tp: "req:profiles:save", profile },
+    "res:profiles:save",
+    (msg) => (msg.error ? { ok: false, error: String(msg.error) } : { ok: true, profile: msg.profile as Profile })
+  );
+  return result ?? { ok: false, error: `No answer from ${config.deviceHost}` };
+}
+
+/**
+ * Raw /api/settings. Contains wifiPassword, apPassword and haPassword in
+ * cleartext, unauthenticated — callers must pass it through groupSettings()
+ * and never return it as-is.
+ */
+export async function fetchRawSettings(): Promise<Record<string, unknown>> {
+  const response = await fetch(`${httpBase}/api/settings`, {
+    headers: { Accept: "application/json" },
+    signal: timeout(),
+  });
+  if (!response.ok) throw new Error(`GET /api/settings failed: HTTP ${response.status}`);
+  return (await response.json()) as Record<string, unknown>;
+}

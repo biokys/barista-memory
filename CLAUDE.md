@@ -48,8 +48,14 @@ as "leave it alone", which is why omitting the field is safe.)
 
 **`POST /api/settings` applies booleans through `hasArg()`.** A partial write
 silently clears every boolean setting not present in the body. Any write tool
-needs a full read-modify-write; this is why `get_machine_settings` in the
-companion MCP is read-only.
+needs a full read-modify-write; this is why `get_machine_settings` is
+read-only.
+
+**`req:profiles:save` replaces the whole profile.** Fields not sent are gone,
+`selected` included — an edit through the old machine MCP came back with
+`selected: false`. `save_profile` here loads the existing profile and merges
+the caller's fields onto it first. Verified by a no-change round trip of
+"Light 94" that came back identical.
 
 **`GET /api/settings` returns `wifiPassword`, `apPassword` and `haPassword` in
 cleartext, unauthenticated.** Never pass that payload through unfiltered.
@@ -76,9 +82,9 @@ pressures come back physically impossible, suspect the parser before the
 machine.** Sane ranges: 20–105 °C, 0–12 bar.
 
 When updating them, keep them in sync with the device, not with the upstream
-repo. The Pi's other vendored copy at `~/c19-printer/vendor/gaggimate-mcp` is
-**not a git checkout and has been ahead of the fork twice** — check its
-`tools/list` *and* a real `get_shot` before overwriting anything there.
+repo. The old machine MCP (`gaggimate-mcp`) is retired as of 2026-09-22: its
+profile and settings tools live here, the receipt pipeline and Claude Code use
+this server only.
 
 ## Invariants worth preserving
 
@@ -195,9 +201,8 @@ The MCP server is reached over ssh stdio, so it needs no port; see
 
 ## Related
 
-- `~/Projects/gaggimate-mcp/mcp-server` — the MCP that talks to the machine
-  (profiles, live shots, machine settings). Branch
-  `feat/recover-and-machine-settings`.
+- `~/Projects/gaggimate-mcp/mcp-server` — the former machine MCP, retired;
+  everything it did is in `src/mcp/server.ts` now. Kept for history.
 - `~/Projects/gaggimate-mcp/gaggimate` — firmware checkout, reference only.
   Read it before assuming how the device behaves.
 - `~/c19-printer` on the Pi — the receipt printer pipeline that watches for new

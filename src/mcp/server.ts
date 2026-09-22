@@ -4,7 +4,12 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from "@modelcontextprotocol/sdk/types.js";
 import { config } from "../config.js";
 import { openDatabase, currentSetup, type ShotContextRow } from "../db/db.js";
-import { parseSlog, fetchStatus } from "../device/client.js";
+import {
+  parseSlog, fetchStatus, listProfiles, getProfile, saveProfile, fetchRawSettings,
+  type Profile, type ProfilePhase,
+} from "../device/client.js";
+import { groupSettings } from "../device/machineSettings.js";
+import { PHASE_ARRAY_SCHEMA } from "./profileSchema.js";
 import { transformShotForAI } from "../device/shotTransformer.js";
 import { recordSetup, moveSetup, updateSetup } from "../setups.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "../ingest.js";
@@ -128,6 +133,54 @@ const TOOLS: Tool[] = [
         },
       },
       required: ["shot_id"],
+    },
+  },
+  {
+    name: "list_profiles",
+    description: "List the brewing profiles on the machine: id, label, temperature, which one is selected.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "get_profile",
+    description: "One brewing profile in full, with every phase's pressure, flow, transition and stop targets.",
+    inputSchema: {
+      type: "object",
+      properties: { profile_id: { type: "string", description: "Profile id from list_profiles" } },
+      required: ["profile_id"],
+    },
+  },
+  {
+    name: "save_profile",
+    description:
+      "Create or update a brewing profile on the machine. To update, pass profile_id (or a label that already " +
+      "exists): fields left out keep their current value, so changing one phase's transition does not touch the " +
+      "description, favourite flag or the other phases. To create, pass a new label with temperature and phases. " +
+      "Set utility: true for maintenance profiles such as backflush.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        profile_id: { type: "string", description: "Update this exact profile. Omit to match by label or create." },
+        label: { type: "string", description: "Profile name; also used to find an existing profile when profile_id is omitted." },
+        temperature: { type: "number", description: "Target water temperature in °C. Default for phases that set none." },
+        phases: PHASE_ARRAY_SCHEMA,
+        type: { type: "string", enum: ["standard", "pro"] },
+        description: { type: "string" },
+        favorite: { type: "boolean" },
+        utility: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "get_machine_settings",
+    description:
+      "The machine's own configuration: temperature offset, PID constants, pressure calibration, pump model, " +
+      "timings, paired scale. Read-only, and credentials are withheld by an allowlist — the raw endpoint " +
+      "returns wifi and Home Assistant passwords in cleartext.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        group: { type: "string", description: "One of: temperature, pressure, pump, timing, hardware, behavior, warnings (optional)" },
+      },
     },
   },
   {
@@ -336,6 +389,92 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               };
 
         return ok({ context, machine, shot: curve });
+      }
+
+      case "list_profiles": {
+        const profiles = await listProfiles();
+        if (!profiles) return fail(`No answer from ${config.deviceHost}`, "MACHINE_UNREACHABLE");
+        return ok({
+          profiles: profiles.map((p) => ({
+            id: p.id, label: p.label, type: p.type, temperature: p.temperature,
+            selected: p.selected, favorite: p.favorite, utility: p.utility, phases: p.phases?.length ?? 0,
+          })),
+          count: profiles.length,
+        });
+      }
+
+      case "get_profile": {
+        const profile = await getProfile(args!.profile_id as string);
+        if (!profile) return fail(`No profile "${args!.profile_id}" on the machine`, "PROFILE_NOT_FOUND");
+        return ok({ profile });
+      }
+
+      case "save_profile": {
+        const spec = (args ?? {}) as any;
+        const profiles = await listProfiles();
+        if (!profiles) return fail(`No answer from ${config.deviceHost}`, "MACHINE_UNREACHABLE");
+
+        // Find what is being edited: an explicit id wins, then a matching label.
+        let existing: Profile | null = null;
+        if (spec.profile_id) {
+          const byId = profiles.find((p) => p.id === spec.profile_id);
+          if (!byId) return fail(`No profile with id "${spec.profile_id}"; call list_profiles for the ids that exist`, "PROFILE_NOT_FOUND");
+          existing = (await getProfile(byId.id)) ?? byId;
+        } else if (spec.label) {
+          const byLabel = profiles.find((p) => p.label === spec.label);
+          if (byLabel) existing = (await getProfile(byLabel.id)) ?? byLabel;
+        }
+        if (!existing && (!spec.label || spec.temperature == null || !spec.phases)) {
+          return fail("Creating a profile needs label, temperature and phases", "MISSING_PARAMETER");
+        }
+
+        // The machine replaces the whole profile, so build a complete one:
+        // the caller's fields over the existing profile over sane defaults.
+        // Merging is what keeps 'selected' and the description from being
+        // silently reset by an edit to one phase.
+        const temperature = spec.temperature ?? existing?.temperature ?? 94;
+        const phases: ProfilePhase[] = (spec.phases ?? existing?.phases ?? []).map((phase: any) => ({
+          name: phase.name,
+          phase: phase.phase ?? "brew",
+          // Per-phase valve state, not a constant: a hardcoded 1 makes backflush
+          // impossible, since that cycle is exactly the valve opening and closing.
+          valve: phase.valve ?? 1,
+          duration: phase.duration,
+          temperature: phase.temperature ?? temperature,
+          transition: phase.transition ?? { type: "linear", duration: Math.min(phase.duration, 2), adaptive: true },
+          pump: phase.pump ?? { target: "pressure", pressure: 9, flow: 0 },
+          targets: phase.targets ?? [],
+        }));
+
+        const profile: Profile = {
+          id: existing?.id ?? "",
+          label: spec.label ?? existing!.label,
+          type: spec.type ?? existing?.type ?? "pro",
+          description: spec.description ?? existing?.description ?? "",
+          temperature,
+          favorite: spec.favorite ?? existing?.favorite ?? false,
+          selected: existing?.selected ?? false,
+          utility: spec.utility ?? existing?.utility ?? false,
+          phases,
+        };
+
+        const result = await saveProfile(profile);
+        if (!result.ok) return fail(`Failed to save "${profile.label}": ${result.error}`, "SAVE_FAILED");
+        return ok({ profile: result.profile, action: existing ? "updated" : "created" });
+      }
+
+      case "get_machine_settings": {
+        const grouped = groupSettings(await fetchRawSettings());
+        const requested = args?.group as string | undefined;
+        if (requested && !(requested in grouped.settings)) {
+          return fail(`Unknown group "${requested}". Available: ${Object.keys(grouped.settings).join(", ")}`, "UNKNOWN_GROUP");
+        }
+        return ok({
+          settings: requested ? { [requested]: grouped.settings[requested] } : grouped.settings,
+          withheld_key_count: grouped.withheld_key_count,
+          note: grouped.note,
+          source: config.deviceHost,
+        });
       }
 
       case "machine_now": {

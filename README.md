@@ -62,16 +62,26 @@ src/
   notesSync.ts           push context into the machine's own shot notes
   ingest.ts              one archive pass
   daemon.ts              poll loop (systemd)
-  mcp/server.ts          MCP tools
+  mcp/server.ts          MCP tools: the archive, the machine's live state, and
+                         the two things that write to the machine (profiles,
+                         settings read)
+  mcp/profileSchema.ts   phase schema for save_profile, mirrors the firmware
+  device/machineSettings.ts  allowlist for /api/settings (it leaks passwords)
   cli.ts                 same operations without an MCP client
 scripts/archive.sh       wrapper used by the Robion panel and by hand
 deploy/                  systemd unit and deployment notes
 ```
 
-`device/parsers/` and `device/shotTransformer.ts` are vendored from
-[gaggimate-mcp](https://github.com/biokys/gaggimate-mcp) so an archived shot
-decodes exactly like one read live from the machine. They mirror the firmware's
-`shot_log_format.h` — keep them in sync with the device.
+`device/parsers/`, `device/shotTransformer.ts`, `device/machineSettings.ts`
+and `mcp/profileSchema.ts` began life in
+[gaggimate-mcp](https://github.com/biokys/gaggimate-mcp), whose remaining
+tools (profiles, settings) were folded into this server on 2026-09-22 so one
+MCP covers both reading the archive and changing the machine. The parsers
+mirror the firmware's `shot_log_format.h` — keep them in sync with the device.
+
+`save_profile` merges the caller's fields onto the existing profile before
+sending, because the machine replaces the whole profile: editing one phase's
+transition must not reset the description or the selected flag.
 
 ## Two decisions that matter
 
