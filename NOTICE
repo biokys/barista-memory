@@ -1,0 +1,16 @@
+barista-memory
+Copyright (C) 2026 Jan Müller
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, version 3.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+details: https://www.gnu.org/licenses/agpl-3.0.html
+
+The parsers in src/device/parsers/ and src/device/shotTransformer.ts are
+derived from https://github.com/biokys/gaggimate-mcp (a fork of
+https://github.com/matvey-kuk/gaggimate-mcp) and mirror the GaggiMate
+firmware's shot_log_format.h.

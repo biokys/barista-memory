@@ -3,9 +3,9 @@
 Remembers what the barista cannot: every shot, the beans and grind in force,
 and how warm the machine really was — for a GaggiMate espresso machine.
 
-Licensed under the **GNU AGPL-3.0**: use it, change it, run it — and if you
-ship a changed version, even as a service, publish your changes under the same
-terms. See `LICENSE`.
+Copyright © 2026 Jan Müller. Licensed under the **GNU AGPL-3.0**: use it,
+change it, run it — and if you ship a changed version, even as a service,
+publish your changes under the same terms. See `LICENSE`.
 
 ## Why this exists
 
