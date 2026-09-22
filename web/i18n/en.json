@@ -242,5 +242,8 @@
   "machine.mode.steam": "Steam",
   "machine.mode.water": "Hot water",
   "machine.mode_changed": "Machine switched to {mode}.",
-  "machine.mode_failed": "Switching failed."
+  "machine.mode_failed": "Switching failed.",
+  "profiles.select": "Set on machine",
+  "profiles.selected_done": "The machine now uses {label}.",
+  "profiles.select_failed": "Could not set the profile."
 }

@@ -1,4 +1,4 @@
-import { listProfiles, getProfile, saveProfile, type Profile, type ProfilePhase } from "./device/client.js";
+import { listProfiles, getProfile, saveProfile, selectProfile, type Profile, type ProfilePhase } from "./device/client.js";
 
 export interface ProfileSpec {
   profile_id?: string;
@@ -68,4 +68,26 @@ export async function saveProfileMerged(spec: ProfileSpec): Promise<SaveResult> 
   const result = await saveProfile(profile);
   if (!result.ok) return { ok: false, code: "SAVE_FAILED", message: result.error };
   return { ok: true, profile: result.profile, action: existing ? "updated" : "created" };
+}
+
+export type SelectResult =
+  | { ok: true; profile: Profile }
+  | { ok: false; code: "MACHINE_UNREACHABLE" | "PROFILE_NOT_FOUND" | "NOT_SELECTED"; message: string };
+
+/**
+ * Make a profile the current one on the machine and confirm it by reading
+ * the list back: the firmware's select handler reports nothing, an unknown
+ * id included, so the list is the only evidence the change took.
+ */
+export async function selectProfileOnMachine(profileId: string): Promise<SelectResult> {
+  const before = await listProfiles();
+  if (!before) return { ok: false, code: "MACHINE_UNREACHABLE", message: "No answer from the machine" };
+  if (!before.some((p) => p.id === profileId)) return { ok: false, code: "PROFILE_NOT_FOUND", message: `No profile with id ${profileId}` };
+
+  if (!(await selectProfile(profileId))) return { ok: false, code: "MACHINE_UNREACHABLE", message: "The machine did not answer the select request" };
+
+  const after = await listProfiles();
+  const selected = after?.find((p) => p.selected);
+  if (selected?.id !== profileId) return { ok: false, code: "NOT_SELECTED", message: "The machine did not switch profiles" };
+  return { ok: true, profile: selected };
 }

@@ -14,7 +14,7 @@ import { massTemperatureSeries, settledness } from "../thermalModel.js";
 import { changeMode, SWITCHABLE_MODES } from "../machineControl.js";
 import { recordSetup, updateSetup } from "../setups.js";
 import { loadArchivedShot, pressureSparkline } from "../shots.js";
-import { saveProfileMerged } from "../profiles.js";
+import { saveProfileMerged, selectProfileOnMachine } from "../profiles.js";
 import { statsSummary } from "../stats.js";
 import { ingestOnce } from "../ingest.js";
 import { recordEvent, updateEvent, deleteEvent, listEvents, eraOf, EVENT_KINDS } from "../events.js";
@@ -314,6 +314,12 @@ route("GET", "/api/profiles/:id", async (_req, res, p) => {
 route("PUT", "/api/profiles/:id", async (req, res, p) => {
   const body = await readJson(req);
   const result = await saveProfileMerged({ ...body, profile_id: p.id });
+  if (!result.ok) return json(res, result.code === "PROFILE_NOT_FOUND" ? 404 : 502, { error: result.code, message: result.message });
+  json(res, 200, result);
+});
+
+route("POST", "/api/profiles/:id/select", async (_req, res, p) => {
+  const result = await selectProfileOnMachine(p.id);
   if (!result.ok) return json(res, result.code === "PROFILE_NOT_FOUND" ? 404 : 502, { error: result.code, message: result.message });
   json(res, 200, result);
 });

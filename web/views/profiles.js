@@ -49,7 +49,18 @@ export async function renderProfiles(view, [id]) {
         <div class="main"><div class="title"><b>${p.label}</b>${p.selected ? `<span class="pill accent">${t("profiles.selected")}</span>` : ""}${p.favorite ? `<span class="pill">★ ${t("profiles.favorite")}</span>` : ""}${p.utility ? `<span class="pill">${t("profiles.utility")}</span>` : ""}</div>
         <div class="meta">${p.description ?? ""}</div></div>
         <div class="nums num"><span><b>${p.temperature} °C</b><i>${t("profiles.temperature").split(" ")[0]}</i></span><span><b>${p.phases?.length ?? "–"}</b><i>${t("profiles.phases")}</i></span></div>
+        ${p.selected ? "" : `<button type="button" class="btn sm" data-select="${p.id}" data-label="${p.label}">${t("profiles.select")}</button>`}
       </a>`).join("")}</div>`;
+    view.querySelectorAll("[data-select]").forEach((b) => (b.onclick = async (e) => {
+      // The button sits inside the row's link; the click must not open the editor.
+      e.preventDefault(); e.stopPropagation();
+      b.disabled = true;
+      try {
+        await api.selectProfile(b.dataset.select);
+        toast(t("profiles.selected_done", { label: b.dataset.label }));
+        renderProfiles(view, [id]);
+      } catch (err) { toast(t("profiles.select_failed") + " " + err.message, "bad"); b.disabled = false; }
+    }));
     return;
   }
 

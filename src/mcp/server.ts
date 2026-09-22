@@ -6,7 +6,7 @@ import { config } from "../config.js";
 import { openDatabase, currentSetup, type ShotContextRow } from "../db/db.js";
 import { fetchStatus, listProfiles, getProfile, fetchRawSettings } from "../device/client.js";
 import { loadArchivedShot } from "../shots.js";
-import { saveProfileMerged } from "../profiles.js";
+import { saveProfileMerged, selectProfileOnMachine } from "../profiles.js";
 import { recordEvent, listEvents, eraOf, EVENT_KINDS } from "../events.js";
 import { changeMode, SWITCHABLE_MODES } from "../machineControl.js";
 import { maintenanceStatus, logMaintenance, listMaintenanceLog, markLastFlushAsCafiza, MAINTENANCE_KEYS } from "../maintenance.js";
@@ -229,6 +229,11 @@ const TOOLS: Tool[] = [
         group: { type: "string", description: "One of: temperature, pressure, pump, timing, hardware, behavior, warnings (optional)" },
       },
     },
+  },
+  {
+    name: "select_profile",
+    description: "Make a profile the machine's current one (what the next shot will use). Confirmed by reading the list back.",
+    inputSchema: { type: "object", properties: { profile_id: { type: "string" } }, required: ["profile_id"] },
   },
   {
     name: "set_machine_mode",
@@ -487,6 +492,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           note: grouped.note,
           source: config.deviceHost,
         });
+      }
+
+      case "select_profile": {
+        const result = await selectProfileOnMachine(String(args?.profile_id ?? ""));
+        return result.ok ? ok(result) : fail(result.message, result.code);
       }
 
       case "set_machine_mode": {

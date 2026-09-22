@@ -25,6 +25,7 @@ export const api = {
   machineSettings: () => call("GET", "api/machine/settings"),
   profiles: () => call("GET", "api/profiles"),
   profile: (id) => call("GET", `api/profiles/${id}`),
+  selectProfile: (id) => call("POST", `api/profiles/${id}/select`),
   saveProfile: (id, spec) => call("PUT", `api/profiles/${id}`, spec),
   stats: () => call("GET", "api/stats"),
   events: () => call("GET", "api/events"),

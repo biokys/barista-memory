@@ -242,5 +242,8 @@
   "machine.mode.steam": "Pára",
   "machine.mode.water": "Horká voda",
   "machine.mode_changed": "Stroj přepnut: {mode}.",
-  "machine.mode_failed": "Přepnutí se nepovedlo."
+  "machine.mode_failed": "Přepnutí se nepovedlo.",
+  "profiles.select": "Nastavit na stroji",
+  "profiles.selected_done": "Na stroji je teď profil {label}.",
+  "profiles.select_failed": "Nastavení profilu se nepovedlo."
 }

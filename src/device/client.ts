@@ -193,6 +193,12 @@ export async function saveProfile(profile: Profile): Promise<{ ok: true; profile
   return result ?? { ok: false, error: `No answer from ${config.deviceHost}` };
 }
 
+/** Make a profile the machine's current one; the firmware answers with no payload. */
+export async function selectProfile(profileId: string): Promise<boolean> {
+  const result = await wsRequest({ tp: "req:profiles:select", id: profileId }, "res:profiles:select", (msg) => !msg.error);
+  return result === true;
+}
+
 /**
  * Send one request the firmware never answers. Resolves once the socket has
  * flushed it; whether the machine acted on it has to be observed elsewhere
