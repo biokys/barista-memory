@@ -126,15 +126,24 @@ afternoon wake-up. The per-shot result is stored on `shots` as
 `machine_settled` so it can be correlated in plain SQL; NULL means the state
 record started after the shot, never "cold".
 
-**A backflush is a shot to the firmware.** A run on a utility profile lands in
-the shot index and gets a `.slog` like any coffee. Ingest classifies it as
-`kind = 'flush'` from the machine's profile list (utility flag; the profile
-name is only the fallback when the machine cannot be asked) and the
-`shot_context` view filters on `kind = 'shot'`, so every statistic, the
-history and notes sync see coffees only. Flush runs are still archived and
-each one becomes an automatic `maintenance_log` entry. Maintenance status is
-computed from the log and the archive on every read — nothing about "due" is
-stored, so a changed interval or a backdated entry applies at once.
+**The firmware never records a run on a utility profile.**
+`ShotHistoryPlugin::startRecording()` returns early when `isUtility()`, so a
+backflush on the flagged `Backflush` profile leaves no index entry and no
+`.slog`; the first backflush after the maintenance feature shipped (2026-09-22)
+was invisible to ingest. Backflushes are therefore watched live:
+`statusStream.ts` keeps one WebSocket open (the machine's own UI does the same)
+and `flushWatch.ts` logs a backflush when the selected profile is utility and
+a process is active for ≥ 20 s. The `evt:status` shape differs between
+firmware versions (the device omits `pr`, `fl` and `process` when idle, and
+the checkout is older than the device), so the watcher traces one status line
+per 5 s to the journal while a utility profile is selected in brew mode —
+look there first when a flush was not logged. The index path still exists:
+a run on a profile that was *not* flagged utility at the time (shot 406, made
+before the flag was set) is classified `kind = 'flush'` by profile id, and the
+`shot_context` view filters on `kind = 'shot'` so every statistic, the history
+and notes sync see coffees only. Maintenance status is computed from the log
+and the archive on every read — nothing about "due" is stored, so a changed
+interval or a backdated entry applies at once.
 
 **Notes sync compares a fingerprint before touching the machine.** `notes_sync`
 stores the archive-side inputs each push was built from; a pass where they are

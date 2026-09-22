@@ -68,7 +68,9 @@ src/
   mcp/profileSchema.ts   phase schema for save_profile, mirrors the firmware
   device/machineSettings.ts  allowlist for /api/settings (it leaks passwords)
   events.ts              turning points (new tool, technique change) and eras
-  maintenance.ts         cleaning routines: intervals, log, flush detection
+  maintenance.ts         cleaning routines: intervals, log, status
+  flushWatch.ts          logs a backflush from the live status stream
+  device/statusStream.ts one persistent WebSocket to the machine's evt:status
   web/server.ts          JSON API + static files for the web UI
   cli.ts                 same operations without an MCP client
 web/                     the UI: no build step, ES modules, uPlot, Inter
@@ -190,10 +192,12 @@ before and after a change can be compared.
 The same screen tracks **maintenance**. Each routine is worn down by
 something different, so each is measured in its own unit: backflush and Cafiza
 by coffees pulled, descaling (and an optional water filter) by litres of water
-the pump moved, the group gasket by days. A backflush is recognised on its own:
-the firmware records a run on a utility profile exactly like a coffee, so the
-archive marks such runs as `kind = 'flush'`, keeps them out of every coffee
-statistic and logs them as a backflush. The machine cannot see whether Cafiza
+the pump moved, the group gasket by days. A backflush is recognised on its own: the firmware
+writes no history for a run on a utility profile, so the daemon keeps the
+machine's status stream open and logs a backflush when it sees a utility
+profile run for more than twenty seconds. (A run on a profile that was not
+yet flagged utility is still archived, marked `kind = 'flush'` and kept out of
+every coffee statistic.) The machine cannot see whether Cafiza
 was in the basket, so one button promotes the last detected flush to a Cafiza
 run. Status is computed from the log and the archive, never stored, and the
 intervals are yours to change. The home page shows one chip per routine, red

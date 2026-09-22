@@ -3,6 +3,8 @@ import { openDatabase } from "./db/db.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "./ingest.js";
 import { fetchStatus } from "./device/client.js";
 import { recordState } from "./machineState.js";
+import { startStatusStream } from "./device/statusStream.js";
+import { createFlushWatcher } from "./flushWatch.js";
 
 /**
  * Poll the device forever, archiving whatever is new.
@@ -34,6 +36,11 @@ async function main(): Promise<void> {
   const contextualised = recomputeMachineContext(db);
   if (contextualised > 0) console.log(`derived machine context for ${contextualised} shot(s)`);
 
+  // Backflushes are never written to the machine's history, so they are
+  // watched live instead of ingested.
+  const flushWatcher = createFlushWatcher(db);
+  const stopStream = startStatusStream((ev) => flushWatcher.onStatus(ev), () => flushWatcher.onGap());
+
   while (running) {
     // Sampled before the ingest and outside its try, because an unreachable
     // machine is exactly the observation worth keeping: the firmware records no
@@ -62,6 +69,7 @@ async function main(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, config.pollIntervalS * 1000));
   }
 
+  stopStream();
   db.close();
 }
 
