@@ -1,5 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { readFile, stat } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { stat } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { createReadStream, existsSync } from "node:fs";
 import { extname, join, normalize, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,6 +34,19 @@ const PORT = Number(process.env.GAGGIMATE_WEB_PORT ?? 8080);
 const HOST = process.env.GAGGIMATE_WEB_HOST ?? "0.0.0.0";
 
 const db = openDatabase(config.databasePath);
+
+/**
+ * What is running: read once at startup. The commit comes from the checkout
+ * the server runs from — deploy.sh guarantees it is one — and is what the
+ * footer shows, so "which build is this" is answered by looking at the page.
+ */
+const VERSION = (() => {
+  let version = "0.0.0";
+  try { version = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version; } catch {}
+  let commit = "";
+  try { commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim(); } catch {}
+  return { version, commit, node: process.version };
+})();
 
 /** Third-party assets served straight from node_modules, so nothing is copied at build. */
 const VENDOR: Record<string, string> = {
@@ -86,6 +101,10 @@ function route(method: string, path: string, handler: Handler): void {
   const pattern = new RegExp("^" + path.replace(/:(\w+)/g, (_, key) => (keys.push(key), "([^/]+)")) + "$");
   routes.push({ method, pattern, keys, handler });
 }
+
+route("GET", "/api/version", async (_req, res) => {
+  json(res, 200, VERSION);
+});
 
 route("GET", "/api/now", async (_req, res) => {
   const live = await fetchStatus();

@@ -74,8 +74,21 @@ document.getElementById("lang").addEventListener("click", () => {
   setLang(currentLang() === "cs" ? "en" : "cs");
   document.getElementById("lang").textContent = currentLang().toUpperCase();
   document.documentElement.lang = currentLang();
-  navigate(); pollLive();
+  navigate(); pollLive(); renderFooter();
 });
+
+async function renderFooter() {
+  const foot = document.getElementById("foot");
+  let v = { version: "", commit: "" };
+  try { v = await fetch("/api/version").then((r) => r.json()); } catch {}
+  foot.innerHTML = `
+    <span><b>barista-memory</b> <span class="num">${v.version ? "v" + v.version : ""}</span>${v.commit ? ` <span class="faint num" title="${t("footer.deployed")}">${v.commit}</span>` : ""}</span>
+    <span class="foot-links">
+      <a href="https://github.com/biokys/barista-memory" target="_blank" rel="noopener">${t("footer.source")}</a>
+      <a href="https://www.gnu.org/licenses/agpl-3.0.html" target="_blank" rel="noopener">AGPL-3.0</a>
+    </span>
+    <span class="faint">${t("footer.tagline")}</span>`;
+}
 
 await initI18n();
 document.getElementById("lang").textContent = currentLang().toUpperCase();
@@ -83,4 +96,5 @@ document.documentElement.lang = currentLang();
 window.addEventListener("hashchange", navigate);
 navigate();
 pollLive();
+renderFooter();
 setInterval(pollLive, 20000);

@@ -196,5 +196,8 @@
   "shot.era_none": "žádná zaznamenaná změna",
   "stats.per_era": "Podle éry",
   "stats.per_era_hint": "Shoty mezi dvěma změnami. Před WDT vs. po WDT.",
-  "stats.col.era": "Od změny"
+  "stats.col.era": "Od změny",
+  "footer.source": "Zdrojový kód",
+  "footer.deployed": "nasazený commit",
+  "footer.tagline": "Pamatuje si to, co barista ne."
 }

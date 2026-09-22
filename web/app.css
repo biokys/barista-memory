@@ -30,7 +30,8 @@
 * { box-sizing: border-box; }
 html { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 15px;
        -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
-body { margin: 0; min-height: 100dvh; padding-bottom: env(safe-area-inset-bottom); }
+body { margin: 0; min-height: 100dvh; padding-bottom: env(safe-area-inset-bottom); display: flex; flex-direction: column; }
+.view { flex: 1; width: 100%; }
 a { color: inherit; text-decoration: none; }
 button, input, select, textarea { font: inherit; color: inherit; }
 ::selection { background: rgba(217,160,102,.35); }
@@ -166,6 +167,15 @@ td.r, th.r { text-align: right; }
 .tl-item::before { content: ""; position: absolute; left: -17px; top: 15px; width: 9px; height: 9px; border-radius: 50%; background: var(--line-2); border: 2px solid var(--bg); }
 .tl-item.current::before { background: var(--accent); box-shadow: 0 0 0 3px rgba(217,160,102,.2); }
 .tl-item .when { font-size: .78rem; color: var(--text-3); }
+
+/* ---- footer ---- */
+.foot { max-width: 1120px; width: 100%; margin: 0 auto; padding: 18px var(--pad) 26px; display: flex; gap: 18px; flex-wrap: wrap; align-items: baseline; justify-content: space-between;
+        border-top: 1px solid var(--line); color: var(--text-3); font-size: .78rem; }
+.foot b { color: var(--text-2); font-weight: 560; }
+.foot-links { display: flex; gap: 16px; }
+.foot a { color: var(--text-2); border-bottom: 1px solid var(--line-2); padding-bottom: 1px; }
+.foot a:hover { color: var(--accent-2); border-color: var(--accent); }
+@media (max-width: 560px) { .foot { justify-content: center; text-align: center; gap: 10px; } }
 
 /* ---- misc ---- */
 .empty { color: var(--text-3); text-align: center; padding: 40px 0; }
