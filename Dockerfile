@@ -24,8 +24,10 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY web ./web
-RUN mkdir -p /data && chown node:node /data
-USER node
+# Runs as root on purpose: Home Assistant mounts /data as root with
+# options.json readable only by root, and add-ons run as root by convention.
+# The first add-on install as user `node` failed with EACCES on both.
+RUN mkdir -p /data
 VOLUME ["/data"]
 EXPOSE 8080
 HEALTHCHECK --interval=60s --timeout=5s --start-period=20s \
