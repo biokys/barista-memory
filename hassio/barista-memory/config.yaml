@@ -18,11 +18,22 @@ ports:
   8080/tcp: null
 ports_description:
   8080/tcp: Web UI without Home Assistant login (LAN only)
+# Mosquitto's credentials come from the Supervisor when it is installed.
+services:
+  - mqtt:want
 options:
   machine_host: ""
   poll_interval: 30
   sync_notes: true
+  ready_percent: 85
+  mqtt_url: ""
+  mqtt_user: ""
+  mqtt_password: ""
 schema:
   machine_host: str
   poll_interval: int(5,600)
   sync_notes: bool
+  ready_percent: int(50,100)
+  mqtt_url: str?
+  mqtt_user: str?
+  mqtt_password: password?

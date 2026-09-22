@@ -17,7 +17,34 @@ const OPTION_TO_ENV: Record<string, string> = {
   machine_host: "GAGGIMATE_HOST",
   poll_interval: "GAGGIMATE_POLL_INTERVAL",
   sync_notes: "GAGGIMATE_SYNC_NOTES",
+  mqtt_url: "GAGGIMATE_MQTT_URL",
+  mqtt_user: "GAGGIMATE_MQTT_USER",
+  mqtt_password: "GAGGIMATE_MQTT_PASSWORD",
+  ready_percent: "GAGGIMATE_READY_PCT",
 };
+
+/**
+ * Under Home Assistant the Mosquitto add-on hands out its credentials through
+ * the Supervisor, so MQTT needs no configuration at all when it is installed.
+ * An explicit mqtt_url option wins; without Supervisor or Mosquitto, MQTT
+ * simply stays off.
+ */
+async function applySupervisorMqtt(): Promise<void> {
+  const token = process.env.SUPERVISOR_TOKEN;
+  if (!token || process.env.GAGGIMATE_MQTT_URL) return;
+  try {
+    const res = await fetch("http://supervisor/services/mqtt", { headers: { Authorization: `Bearer ${token}` } });
+    if (!res.ok) { console.log(`mqtt: no broker from Supervisor (${res.status})`); return; }
+    const { data } = (await res.json()) as { data?: { host?: string; port?: number; username?: string; password?: string; ssl?: boolean } };
+    if (!data?.host) return;
+    process.env.GAGGIMATE_MQTT_URL = `${data.ssl ? "mqtts" : "mqtt"}://${data.host}:${data.port ?? 1883}`;
+    if (data.username) process.env.GAGGIMATE_MQTT_USER = data.username;
+    if (data.password) process.env.GAGGIMATE_MQTT_PASSWORD = data.password;
+    console.log(`mqtt: broker ${data.host}:${data.port ?? 1883} provided by the Supervisor`);
+  } catch (error) {
+    console.log(`mqtt: Supervisor not reachable: ${error instanceof Error ? error.message : error}`);
+  }
+}
 
 function applyHomeAssistantOptions(): void {
   if (!existsSync(HA_OPTIONS)) return;
@@ -38,6 +65,7 @@ function applyHomeAssistantOptions(): void {
 }
 
 applyHomeAssistantOptions();
+await applySupervisorMqtt();
 
 // The web server only listens; the daemon module runs its poll loop until
 // SIGTERM and resolves when it has finished its last pass, at which point

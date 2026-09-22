@@ -8,3 +8,15 @@ configuration:
   sync_notes:
     name: Write context back to the machine
     description: Store bean, dose, grind and ratio in the machine's own shot notes.
+  ready_percent:
+    name: Ready at (% warm-up)
+    description: Warm-up percent at which the "Machine ready" sensor turns on.
+  mqtt_url:
+    name: MQTT broker URL (optional)
+    description: Leave empty to use the Mosquitto add-on automatically. Otherwise e.g. mqtt://192.168.1.10:1883.
+  mqtt_user:
+    name: MQTT user (optional)
+    description: Only with a custom broker URL.
+  mqtt_password:
+    name: MQTT password (optional)
+    description: Only with a custom broker URL.

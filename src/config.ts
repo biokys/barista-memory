@@ -22,6 +22,16 @@ export const config = {
   requestTimeoutMs: Number(process.env.GAGGIMATE_TIMEOUT_MS ?? 10_000),
   /** Push derived context back into the device's own shot notes. */
   syncNotesToDevice: process.env.GAGGIMATE_SYNC_NOTES !== "0",
+  /** MQTT broker for Home Assistant, e.g. mqtt://homeassistant.local:1883; unset = off. */
+  mqttUrl: process.env.GAGGIMATE_MQTT_URL ?? "",
+  mqttUser: process.env.GAGGIMATE_MQTT_USER ?? "",
+  mqttPassword: process.env.GAGGIMATE_MQTT_PASSWORD ?? "",
+  /** Topic prefix for state and commands; also the Home Assistant device id. */
+  mqttPrefix: process.env.GAGGIMATE_MQTT_PREFIX ?? "barista-memory",
+  /** Home Assistant's discovery prefix. */
+  haDiscoveryPrefix: process.env.GAGGIMATE_HA_DISCOVERY ?? "homeassistant",
+  /** Warm-up percent at which the "ready" sensor turns on. */
+  readyPct: Number(process.env.GAGGIMATE_READY_PCT ?? 85),
 } as const;
 
 export const httpBase = `${config.deviceProtocol === "wss" ? "https" : "http"}://${config.deviceHost}`;

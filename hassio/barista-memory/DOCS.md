@@ -22,6 +22,25 @@ Assistant backups.
 - **Write context back to the machine** — stores bean, dose, grind and ratio
   in the machine's own shot notes, so the machine's UI shows them too.
 
+## Home Assistant entities (MQTT)
+
+With the Mosquitto broker add-on installed nothing needs configuring: the
+add-on gets the broker from the Supervisor and Home Assistant discovers a
+**Barista Memory** device with these entities:
+
+- **Machine warm-up** (%) and **Machine ready** (on once the warm-up model
+  says the group is hot, default 85 %, with hysteresis so it does not flap)
+- **Boiler temperature**, **Target temperature**, **Heating for**
+- **Machine mode** as a sensor and as a select that switches the machine
+  between standby, brew, steam and hot water
+- **Machine on**, **Last shot** (with bean, ratio, weight and rating as
+  attributes), **Maintenance due** and **Shots since backflush**
+
+A notification when the machine is ready is then one automation: trigger on
+`binary_sensor.barista_memory_ready` turning on, action "notify".
+
+Another broker can be set under Configuration instead.
+
 ## Direct access
 
 The web UI is reached through Home Assistant (ingress), which gives it Home

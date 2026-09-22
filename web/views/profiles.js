@@ -46,10 +46,9 @@ export async function renderProfiles(view, [id]) {
   if (!id) {
     view.innerHTML = `<h1>${t("profiles.title")}</h1><div class="list">${list.map((p) => `
       <a class="shot-row" href="#/profiles/${p.id}" style="grid-template-columns:1fr auto">
-        <div class="main"><div class="title"><b>${p.label}</b>${p.selected ? `<span class="pill accent">${t("profiles.selected")}</span>` : ""}${p.favorite ? `<span class="pill">★ ${t("profiles.favorite")}</span>` : ""}${p.utility ? `<span class="pill">${t("profiles.utility")}</span>` : ""}</div>
+        <div class="main"><div class="title"><b>${p.label}</b>${p.selected ? `<span class="pill accent">${t("profiles.selected")}</span>` : `<button type="button" class="btn sm ghost select-btn" data-select="${p.id}" data-label="${p.label}">${t("profiles.select")}</button>`}${p.favorite ? `<span class="pill">★ ${t("profiles.favorite")}</span>` : ""}${p.utility ? `<span class="pill">${t("profiles.utility")}</span>` : ""}</div>
         <div class="meta">${p.description ?? ""}</div></div>
         <div class="nums num"><span><b>${p.temperature} °C</b><i>${t("profiles.temperature").split(" ")[0]}</i></span><span><b>${p.phases?.length ?? "–"}</b><i>${t("profiles.phases")}</i></span></div>
-        ${p.selected ? "" : `<button type="button" class="btn sm" data-select="${p.id}" data-label="${p.label}">${t("profiles.select")}</button>`}
       </a>`).join("")}</div>`;
     view.querySelectorAll("[data-select]").forEach((b) => (b.onclick = async (e) => {
       // The button sits inside the row's link; the click must not open the editor.
