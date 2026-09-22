@@ -169,14 +169,14 @@ route("GET", "/api/shots", async (_req, res, _p, url) => {
 });
 
 route("GET", "/api/shots/:id/receipt.png", async (_req, res, p) => {
-  const receipt = await renderShotReceipt(db, Number(p.id));
+  const receipt = await renderShotReceipt(db, Number(p.id), printerSettings(db).lang);
   if (!receipt) return json(res, 404, { error: "SHOT_NOT_FOUND" });
   res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-cache" });
   res.end(Buffer.from(receipt.png));
 });
 
 route("GET", "/api/shots/:id/receipt.svg", async (_req, res, p) => {
-  const receipt = await renderShotReceipt(db, Number(p.id));
+  const receipt = await renderShotReceipt(db, Number(p.id), printerSettings(db).lang);
   if (!receipt) return json(res, 404, { error: "SHOT_NOT_FOUND" });
   res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "no-cache" });
   res.end(receipt.svg);
