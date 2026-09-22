@@ -236,5 +236,6 @@
   "maint.never": "never yet",
   "maint.detected": "detected from the machine",
   "maint.saved": "Recorded.",
-  "maint.confirm_delete": "Delete this entry?"
+  "maint.confirm_delete": "Delete this entry?",
+  "machine.body": "body (model)"
 }

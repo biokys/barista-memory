@@ -9,7 +9,8 @@ import { config } from "../config.js";
 import { openDatabase, currentSetup, type ShotContextRow } from "../db/db.js";
 import { fetchStatus, listProfiles, getProfile, fetchRawSettings } from "../device/client.js";
 import { groupSettings } from "../device/machineSettings.js";
-import { currentConditions, powerSessions, allStateSamples } from "../machineState.js";
+import { currentConditions, powerSessions, allStateSamples, type StateRow } from "../machineState.js";
+import { massTemperatureSeries, settledness } from "../thermalModel.js";
 import { recordSetup, updateSetup } from "../setups.js";
 import { loadArchivedShot, pressureSparkline } from "../shots.js";
 import { saveProfileMerged } from "../profiles.js";
@@ -266,9 +267,17 @@ route("GET", "/api/machine/state", async (_req, res, _p, url) => {
   const now = Math.floor(Date.now() / 1000);
   const since = Number(url.searchParams.get("since") ?? now - 24 * 3600);
   const until = Number(url.searchParams.get("until") ?? now);
-  const samples = db
+  const window = db
     .prepare("SELECT sampled_at, reachable, mode, target_temp, current_temp FROM machine_state WHERE sampled_at BETWEEN ? AND ? ORDER BY sampled_at")
-    .all(since, until);
+    .all(since, until) as unknown as StateRow[];
+  // The modelled body temperature needs the history before the window too:
+  // a machine switched on an hour before `since` is still cooling from it.
+  const mass = massTemperatureSeries(allStateSamples(db), window.map((s) => s.sampled_at));
+  const samples = window.map((s, i) => ({
+    ...s,
+    mass_temp: mass[i] == null ? null : Math.round(mass[i]! * 10) / 10,
+    settledness: mass[i] == null || !s.target_temp ? null : settledness(mass[i]!, s.target_temp),
+  }));
   const shots = db
     .prepare("SELECT id, started_at, ratio, machine_settledness FROM shot_context WHERE started_at BETWEEN ? AND ? ORDER BY started_at")
     .all(since, until);

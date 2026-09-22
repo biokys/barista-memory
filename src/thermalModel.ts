@@ -66,6 +66,38 @@ export function massTemperatureAt(samples: StateRow[], at: number): number | nul
 }
 
 /**
+ * Estimated mass temperature at each of `at` (ascending), in one pass over
+ * the history. Same law as massTemperatureAt(); this is what the machine
+ * chart plots beside the sensor reading, so it needs every point of a day
+ * without walking the history once per point.
+ */
+export function massTemperatureSeries(samples: StateRow[], at: number[]): Array<number | null> {
+  const out: Array<number | null> = [];
+  let mass: number | null = null;
+  let prev: StateRow | null = null;
+  let i = 0;
+
+  const emitUpTo = (limit: number) => {
+    while (i < at.length && at[i] <= limit) {
+      out.push(mass === null || prev === null ? null : step(mass, prev, at[i] - prev.sampled_at));
+      i++;
+    }
+  };
+
+  for (const row of samples) {
+    emitUpTo(row.sampled_at - 1);
+    if (mass === null) {
+      mass = row.reachable === 1 && row.current_temp != null ? row.current_temp : ROOM_TEMP_C;
+    } else {
+      mass = step(mass, prev!, row.sampled_at - prev!.sampled_at);
+    }
+    prev = row;
+  }
+  emitUpTo(Number.POSITIVE_INFINITY);
+  return out;
+}
+
+/**
  * Advance the mass through `seconds` under the regime `during` describes.
  *
  * "Heating" is decided by what the boiler is actually doing, not by the

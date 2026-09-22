@@ -236,5 +236,6 @@
   "maint.never": "zatím nikdy",
   "maint.detected": "rozpoznáno ze stroje",
   "maint.saved": "Zapsáno.",
-  "maint.confirm_delete": "Smazat tento zápis?"
+  "maint.confirm_delete": "Smazat tento zápis?",
+  "machine.body": "těleso (model)"
 }

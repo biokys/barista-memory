@@ -161,12 +161,16 @@ export function machineChart(container, samples, shots, sessions, events = []) {
     x,
     samples.map((s) => (s.reachable ? s.current_temp : null)),
     samples.map((s) => (s.reachable && s.target_temp > 0 ? s.target_temp : null)),
+    // The modelled body temperature is defined while the machine is off too
+    // (it is cooling), so it is the one line that crosses the grey bands.
+    samples.map((s) => s.mass_temp ?? null),
+    samples.map((s) => s.settledness ?? null),
   ];
   const plot = new uPlot({
     width: container.clientWidth, height: 280,
     cursor: { drag: { x: true, y: false } },
     legend: { show: false },
-    scales: { x: { time: true }, y: { range: [15, 105] } },
+    scales: { x: { time: true }, y: { range: [15, 105] }, pct: { range: [0, 100] } },
     axes: [
       axis({ scale: "x" }),
       axis({ scale: "y", values: (u, v) => v.map((n) => n + "°") }),
@@ -175,6 +179,8 @@ export function machineChart(container, samples, shots, sessions, events = []) {
       { value: "{HH}:{mm}" },
       { label: "°C", stroke: c.temp, width: 2, spanGaps: false, value: (u, v) => (v == null ? "–" : v.toFixed(1)) },
       { label: "target", stroke: c.faint, width: 1, dash: [3, 4], spanGaps: false, value: (u, v) => (v == null ? "–" : v) },
+      { label: "body", stroke: c.accent, width: 1.5, dash: [6, 4], spanGaps: true, value: (u, v) => (v == null ? "–" : v.toFixed(1)) },
+      { label: "warm-up", show: false, scale: "pct" },
     ],
     hooks: {
       drawClear: [(u) => {
@@ -205,9 +211,12 @@ export function machineChart(container, samples, shots, sessions, events = []) {
     },
   }, data, container);
   const last = [...samples].reverse().find((s) => s.reachable && s.current_temp != null);
+  const lastMass = [...samples].reverse().find((s) => s.mass_temp != null);
   readout(plot, container, [
     { series: 1, name: t("shot.temperature"), label: "°C", color: c.temp, fmt: (v) => v.toFixed(1), idle: last ? `${last.current_temp.toFixed(1)}` : "–", x: (x) => new Date(x * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
     { series: 2, name: t("machine.target"), label: "°C", color: c.faint, fmt: (v) => String(v), idle: last && last.target_temp > 0 ? String(last.target_temp) : "–" },
+    { series: 3, name: t("machine.body"), label: "°C", color: c.accent, fmt: (v) => v.toFixed(1), idle: lastMass?.mass_temp != null ? lastMass.mass_temp.toFixed(1) : "–" },
+    { series: 4, name: t("machine.settledness"), label: "%", color: c.accent, fmt: (v) => String(v), idle: lastMass?.settledness != null ? String(lastMass.settledness) : "–" },
   ]);
   return responsive(plot, container);
 }
