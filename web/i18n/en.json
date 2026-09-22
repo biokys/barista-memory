@@ -172,7 +172,7 @@
   "common.shots": "shots",
   "common.loading": "Loading…",
   "common.back": "Back",
-  "events.title": "Equipment and technique changes",
+  "events.title": "Changes",
   "events.hint": "One-off turning points that are not a value: a new WDT tool, a puck screen, a different basket, a change of technique. Every later shot belongs to that change's era.",
   "events.add": "Record a change",
   "events.what": "What changed",
@@ -199,5 +199,7 @@
   "stats.col.era": "Since",
   "footer.source": "Source",
   "footer.deployed": "deployed commit",
-  "footer.tagline": "Remembers what the barista cannot."
+  "footer.tagline": "Remembers what the barista cannot.",
+  "nav.events": "Changes",
+  "events.history": "Recorded changes"
 }

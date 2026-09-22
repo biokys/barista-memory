@@ -164,6 +164,7 @@ td.r, th.r { text-align: right; }
 
 /* ---- timeline ---- */
 .timeline { display: grid; gap: 0; position: relative; padding-left: 18px; }
+.timeline:empty::before { display: none; }
 .timeline::before { content: ""; position: absolute; left: 5px; top: 8px; bottom: 8px; width: 1px; background: var(--line-2); }
 .tl-item { position: relative; padding: 10px 0 14px; }
 .tl-item::before { content: ""; position: absolute; left: -17px; top: 15px; width: 9px; height: 9px; border-radius: 50%; background: var(--line-2); border: 2px solid var(--bg); }

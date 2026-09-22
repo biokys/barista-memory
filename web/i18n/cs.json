@@ -172,7 +172,7 @@
   "common.shots": "shotů",
   "common.loading": "Načítám…",
   "common.back": "Zpět",
-  "events.title": "Změny vybavení a techniky",
+  "events.title": "Změny",
   "events.hint": "Jednorázové zlomy, které nejsou hodnotou: nový WDT, puck screen, jiný košík, změna techniky. Každý další shot patří do „éry“ od té změny.",
   "events.add": "Zaznamenat změnu",
   "events.what": "Co se změnilo",
@@ -199,5 +199,7 @@
   "stats.col.era": "Od změny",
   "footer.source": "Zdrojový kód",
   "footer.deployed": "nasazený commit",
-  "footer.tagline": "Pamatuje si to, co barista ne."
+  "footer.tagline": "Pamatuje si to, co barista ne.",
+  "nav.events": "Změny",
+  "events.history": "Zaznamenané změny"
 }
