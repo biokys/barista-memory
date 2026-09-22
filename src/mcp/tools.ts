@@ -4,7 +4,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from "@model
 import { config } from "../config.js";
 import type { DatabaseSync } from "node:sqlite";
 import { currentSetup, type ShotContextRow } from "../db/db.js";
-import { fetchStatus, listProfiles, getProfile, fetchRawSettings } from "../device/client.js";
+import { listProfiles, getProfile, fetchRawSettings } from "../device/client.js";
+import { liveStatus } from "../liveStatus.js";
 import { loadArchivedShot } from "../shots.js";
 import { saveProfileMerged, selectProfileOnMachine } from "../profiles.js";
 import { recordEvent, listEvents, eraOf, EVENT_KINDS } from "../events.js";
@@ -356,7 +357,7 @@ const TOOLS: Tool[] = [
  * against the same database handle the caller owns.
  */
 export function createMcpServer(db: DatabaseSync): Server {
-const server = new Server({ name: "barista-memory", version: "0.2.2" }, { capabilities: { tools: {} } });
+const server = new Server({ name: "barista-memory", version: "0.2.3" }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 
@@ -509,7 +510,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "machine_now": {
-        const live = await fetchStatus();
+        const live = await liveStatus();
         const conditions = currentConditions(db, live);
         return ok({
           ...conditions,

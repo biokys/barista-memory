@@ -49,11 +49,11 @@ export interface MachineStatus {
  * A null is meaningful, not just a failure: the machine only answers while it
  * has power, so no answer is how "switched off" is observed.
  */
-export async function fetchStatus(): Promise<MachineStatus | null> {
+export async function fetchStatus(timeoutMs = config.requestTimeoutMs): Promise<MachineStatus | null> {
   try {
     const response = await fetch(`${httpBase}/api/status`, {
       headers: { Accept: "application/json" },
-      signal: timeout(),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return null;
     const body = (await response.json()) as { mode?: number; tt?: number; ct?: number };

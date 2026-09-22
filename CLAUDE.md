@@ -146,6 +146,14 @@ and notes sync see coffees only. Maintenance status is computed from the log
 and the archive on every read — nothing about "due" is stored, so a changed
 interval or a backdated entry applies at once.
 
+**A powered-off machine is silent, not refusing.** ARP gets no answer, so
+every request waits out its full timeout; with the daemon's 10 s each page of
+the web UI hung for 10 s while the machine was off (found 2026-09-22 when the
+user switched it off). Interactive callers go through `liveStatus.ts`: a
+2.5 s probe, cached 3 s on success and 15 s on failure, and machine-side
+routes refuse at once (`requireMachine`) while it is known off. The daemon
+keeps its 10 s — it is not interactive and a slow answer is still an answer.
+
 **Notes sync compares a fingerprint before touching the machine.** `notes_sync`
 stores the archive-side inputs each push was built from; a pass where they are
 unchanged opens no WebSocket. Before that, every pass cost one connection per

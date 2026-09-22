@@ -7,7 +7,8 @@ import { extname, join, normalize, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { config } from "../config.js";
 import { openDatabase, currentSetup, type ShotContextRow } from "../db/db.js";
-import { fetchStatus, listProfiles, getProfile, fetchRawSettings } from "../device/client.js";
+import { listProfiles, getProfile, fetchRawSettings } from "../device/client.js";
+import { liveStatus, machineReachable } from "../liveStatus.js";
 import { groupSettings } from "../device/machineSettings.js";
 import { currentConditions, powerSessions, allStateSamples, type StateRow } from "../machineState.js";
 import { massTemperatureSeries, settledness } from "../thermalModel.js";
@@ -117,7 +118,7 @@ route("GET", "/api/version", async (_req, res) => {
 });
 
 route("GET", "/api/now", async (_req, res) => {
-  const live = await fetchStatus();
+  const live = await liveStatus();
   const conditions = currentConditions(db, live);
   const setup = currentSetup(db);
   const last = db.prepare("SELECT * FROM shot_context ORDER BY started_at DESC LIMIT 1").get() as unknown as
@@ -290,29 +291,45 @@ route("GET", "/api/machine/state", async (_req, res, _p, url) => {
 });
 
 route("POST", "/api/machine/mode", async (req, res) => {
+  if (!(await requireMachine(res))) return;
   const body = await readJson(req);
   const result = await changeMode(String(body.mode ?? ""));
   if (!result.ok) return json(res, result.code === "INVALID_MODE" ? 400 : 502, { error: result.code, message: result.message });
   json(res, 200, { ...result, modes: SWITCHABLE_MODES });
 });
 
+/** Routes that need the machine answer at once while it is known to be off. */
+async function requireMachine(res: ServerResponse): Promise<boolean> {
+  if (await machineReachable()) return true;
+  json(res, 502, { error: "MACHINE_OFF", message: "The machine is not answering" });
+  return false;
+}
+
 route("GET", "/api/machine/settings", async (_req, res) => {
-  json(res, 200, groupSettings(await fetchRawSettings()));
+  if (!(await requireMachine(res))) return;
+  try {
+    json(res, 200, groupSettings(await fetchRawSettings()));
+  } catch (error) {
+    json(res, 502, { error: "MACHINE_UNREACHABLE", message: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 route("GET", "/api/profiles", async (_req, res) => {
+  if (!(await requireMachine(res))) return;
   const profiles = await listProfiles();
   if (!profiles) return json(res, 502, { error: "MACHINE_UNREACHABLE" });
   json(res, 200, { profiles });
 });
 
 route("GET", "/api/profiles/:id", async (_req, res, p) => {
+  if (!(await requireMachine(res))) return;
   const profile = await getProfile(p.id);
   if (!profile) return json(res, 404, { error: "PROFILE_NOT_FOUND" });
   json(res, 200, { profile });
 });
 
 route("PUT", "/api/profiles/:id", async (req, res, p) => {
+  if (!(await requireMachine(res))) return;
   const body = await readJson(req);
   const result = await saveProfileMerged({ ...body, profile_id: p.id });
   if (!result.ok) return json(res, result.code === "PROFILE_NOT_FOUND" ? 404 : 502, { error: result.code, message: result.message });
@@ -320,6 +337,7 @@ route("PUT", "/api/profiles/:id", async (req, res, p) => {
 });
 
 route("POST", "/api/profiles/:id/select", async (_req, res, p) => {
+  if (!(await requireMachine(res))) return;
   const result = await selectProfileOnMachine(p.id);
   if (!result.ok) return json(res, result.code === "PROFILE_NOT_FOUND" ? 404 : 502, { error: result.code, message: result.message });
   json(res, 200, result);

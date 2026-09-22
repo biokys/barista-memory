@@ -12,7 +12,9 @@ function stateLabel(m) {
   return t("machine.holding");
 }
 
-function readiness(p) {
+function readiness(p, reachable) {
+  // A cooling body can still read 90 %, but an off machine is not "ready".
+  if (!reachable) return { text: t("machine.off"), tone: "" };
   if (p == null) return { text: t("machine.unknown"), tone: "" };
   if (p >= 85) return { text: t("machine.ready"), tone: "ok" };
   if (p >= 60) return { text: t("machine.partly"), tone: "warn" };
@@ -25,7 +27,7 @@ const MODES = ["standby", "brew", "steam", "water"];
 export async function renderNow(view) {
   const draw = (now) => {
     const m = now.machine, s = now.setup, last = now.last_shot;
-    const r = readiness(m.settledness);
+    const r = readiness(m.settledness, m.reachable);
     view.innerHTML = `
       <div class="hero">
         <section class="card">
