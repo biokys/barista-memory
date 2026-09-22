@@ -1,15 +1,18 @@
 # syntax=docker/dockerfile:1
 # One image runs the archive daemon and the web UI together (src/main.ts).
-# Node 22 is required for the built-in node:sqlite; there are no native
-# modules, so the same Dockerfile builds for amd64 and arm64 (Raspberry Pi).
+# Node 22 is required for the built-in node:sqlite. Every dependency is pure
+# JavaScript, so node_modules is architecture-independent: it is installed
+# once on the build platform and copied into the arm64 image, rather than
+# running npm under QEMU, which crashed with an illegal instruction on the
+# 0.2.0 build.
 
-FROM node:22-alpine AS build
+FROM --platform=$BUILDPLATFORM node:22-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
-RUN npm run build
+RUN npm run build && npm prune --omit=dev && npm cache clean --force
 
 FROM node:22-alpine
 ARG GIT_COMMIT=""
@@ -20,13 +23,12 @@ ENV BARISTA_COMMIT=$GIT_COMMIT \
     GAGGIMATE_DB=/data/archive.db \
     GAGGIMATE_WEB_PORT=8080 \
     GAGGIMATE_WEB_HOST=0.0.0.0
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+COPY --from=build /app/package.json ./
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY web ./web
 # Runs as root on purpose: Home Assistant mounts /data as root with
 # options.json readable only by root, and add-ons run as root by convention.
-# The first add-on install as user `node` failed with EACCES on both.
 RUN mkdir -p /data
 VOLUME ["/data"]
 EXPOSE 8080
