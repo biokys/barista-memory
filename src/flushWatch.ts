@@ -23,12 +23,17 @@ interface Run {
 /**
  * Turns the status stream into backflush log entries.
  *
- * A run counts when the selected profile is one the machine flags as
- * utility and a process is active. The firmware records nothing for such
- * runs, so this live observation is the only record. While a utility
- * profile is selected in brew mode one status line per few seconds goes to
- * the log: the message shape differs between firmware versions and the
- * next unexpected one should be diagnosable from the journal.
+ * A run counts when a process is active on a utility profile: the process
+ * block's own `u` flag where the firmware sends one, otherwise the selected
+ * profile's id checked against the machine's profile list. The firmware
+ * records nothing for such runs, so this live observation is the only record.
+ *
+ * Status arrives in two halves on newer firmware (see StatusEvent), so the
+ * halves are merged into one state before anything is decided — evaluating
+ * each message alone saw the profile in one and the process in the other and
+ * never both, which is how the first watched backflush went unlogged.
+ * While a utility profile is selected in brew mode one merged state line
+ * per few seconds goes to the log, so the next surprise is diagnosable.
  */
 export function createFlushWatcher(db: DatabaseSync, log: (line: string) => void = console.log) {
   let known = new Set<string>();
@@ -37,6 +42,7 @@ export function createFlushWatcher(db: DatabaseSync, log: (line: string) => void
   let refreshing = false;
   let run: Run | null = null;
   let lastTrace = 0;
+  let state: StatusEvent = {};
 
   const refreshProfiles = () => {
     if (refreshing) return;
@@ -66,21 +72,22 @@ export function createFlushWatcher(db: DatabaseSync, log: (line: string) => void
   };
 
   return {
-    onStatus(ev: StatusEvent) {
+    onStatus(half: StatusEvent) {
+      state = { ...state, ...half };
+      const ev = state;
       const now = Date.now() / 1000;
       const stale = now - fetchedAt > PROFILE_CACHE_S;
       const unknown = !!ev.puid && !known.has(ev.puid) && now - fetchedAt > PROFILE_REFRESH_MIN_S;
       if (stale || unknown) refreshProfiles();
       const isUtility = !!ev.puid && utility.has(ev.puid);
 
-      if (isUtility && ev.m === 1 && now - lastTrace >= 5) {
+      if ((isUtility || ev.process?.u === 1) && ev.m === 1 && now - lastTrace >= 5) {
         lastTrace = now;
         log(`flush watch: ${JSON.stringify({ m: ev.m, p: ev.p, pr: ev.pr, fl: ev.fl, process: ev.process })}`);
       }
 
-      // The process block is the firmware's own word; pressure or flow with a
-      // utility profile selected is the fallback for a firmware that omits it.
-      const active = isUtility && (ev.process?.a === 1 || (ev.process == null && ((ev.pr ?? 0) > 0.5 || (ev.fl ?? 0) > 0)));
+      const onUtility = ev.process?.u != null ? ev.process.u === 1 : isUtility;
+      const active = ev.process?.a === 1 && onUtility;
 
       if (active) {
         if (!run) run = { startedAt: now - (ev.process?.e ?? 0) / 1000, lastSeen: now, label: ev.p ?? "utility profile" };

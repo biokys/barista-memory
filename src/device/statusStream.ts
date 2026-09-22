@@ -2,9 +2,12 @@ import WebSocket from "ws";
 import { wsUrl } from "../config.js";
 
 /**
- * One `evt:status` message from the machine, every 500 ms while connected.
- * Only the fields this code reads are typed; the firmware sends more and
- * trims some (pressure, flow, the process block) when nothing is running.
+ * One `evt:status` message from the machine. Newer firmware splits the event
+ * in two: a slow "state" half (mode, selected profile, capabilities) sent on
+ * change, and a fast "telemetry" half (temperatures, pressure, flow, the
+ * process block) every 500 ms. Neither half is complete on its own, so
+ * consumers merge them; `process: null` in the fast half means no process.
+ * Only the fields this code reads are typed.
  */
 export interface StatusEvent {
   /** Mode: 0 standby, 1 brew, 2 steam, 3 water, 4 grind. */
@@ -14,7 +17,8 @@ export interface StatusEvent {
   puid?: string;
   pr?: number;
   fl?: number;
-  process?: { a?: number; e?: number; l?: string };
+  /** a = active, e = elapsed ms, l = phase label, u = utility profile. */
+  process?: { a?: number; e?: number; l?: string; u?: number } | null;
 }
 
 const RECONNECT_MIN_MS = 5_000;
