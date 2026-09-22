@@ -1,0 +1,23 @@
+# The whole installation without Home Assistant: fill in the machine's IP,
+# then `docker compose up -d` and open http://<this host>:8080.
+# The web UI has no login of its own — keep port 8080 on the LAN.
+services:
+  barista-memory:
+    image: ghcr.io/biokys/barista-memory:latest
+    container_name: barista-memory
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - barista-memory:/data
+    environment:
+      # IP of the GaggiMate. An IP, not gaggimate.local: a container cannot
+      # resolve mDNS names unless it shares the host's network.
+      GAGGIMATE_HOST: 192.168.1.50
+      # Seconds between archive passes.
+      GAGGIMATE_POLL_INTERVAL: "30"
+      # Write bean, dose, grind and ratio back into the machine's shot notes.
+      GAGGIMATE_SYNC_NOTES: "1"
+
+volumes:
+  barista-memory:

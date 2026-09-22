@@ -1,0 +1,10 @@
+configuration:
+  machine_host:
+    name: Machine IP address
+    description: The GaggiMate's IP on your network (shown on its display). Use the IP, not gaggimate.local.
+  poll_interval:
+    name: Poll interval (seconds)
+    description: How often to look for new shots and sample the machine's state.
+  sync_notes:
+    name: Write context back to the machine
+    description: Store bean, dose, grind and ratio in the machine's own shot notes.

@@ -161,6 +161,16 @@ machine sat in brew mode with target 94 while the sensor fell 90 → 49 °C over
 an hour. Test scenarios that must keep holding: woken from 20 °C +2 min ≈ 7 %,
 from 60 °C +2 min ≈ 57 %, an hour of standby after a warm session ≈ 50 %.
 
+**Web URLs are relative, never `/api/...`.** The container image doubles as a
+Home Assistant add-on served through ingress at
+`/api/hassio_ingress/<token>/`; the hash router never changes the document
+path, so `api/now` resolves correctly there and at the root. An absolute path
+breaks the add-on silently (the page loads, every request 404s). Verified
+with a prefix-stripping proxy on 2026-09-22. `src/main.ts` is the container's
+entry point (daemon + web in one process, HA `options.json` mapped onto the
+`GAGGIMATE_*` variables); the systemd deployment still runs the two services
+separately and is unaffected.
+
 **The web UI and the MCP share every code path.** `src/web/server.ts` is a
 thin JSON translation of `shots.ts`, `profiles.ts`, `stats.ts`, `events.ts`,
 `setups.ts` and `machineState.ts`; the MCP calls the same functions. Put
@@ -202,6 +212,12 @@ npm run cli -- maintenance-done cafiza   # log a routine (backflush|cafiza|desca
 npm run cli -- calibrate                   # bloom temperature vs. settledness, to tune TAU_HEAT
 ./scripts/archive.sh show|stats|ingest|set-setup|fix-setup|recompute|recompute-context   # same, against the Pi
 ```
+
+Container image: `docker build -t barista-memory .`; the GHCR images are built
+by `.github/workflows/docker.yml` on a `v*` tag (multi-arch plus the per-arch
+names the HA add-on's `{arch}` needs). The add-on lives in `hassio/` with
+`repository.yaml` at the root, so this repo is also the add-on repository;
+bump `hassio/barista-memory/config.yaml`'s `version` with each tag.
 
 Deploy to the server: **commit, push, `npm run deploy`** (`scripts/deploy.sh`,
 host and path from `.env`). The server is a git checkout of `origin/main`; the

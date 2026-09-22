@@ -82,7 +82,7 @@ document.getElementById("lang").addEventListener("click", () => {
 async function renderFooter() {
   const foot = document.getElementById("foot");
   let v = { version: "", commit: "" };
-  try { v = await fetch("/api/version").then((r) => r.json()); } catch {}
+  try { v = await fetch("api/version").then((r) => r.json()); } catch {}
   foot.innerHTML = `
     <span><b>barista-memory</b> <span class="num">${v.version ? "v" + v.version : ""}</span>${v.commit ? ` <span class="faint num" title="${t("footer.deployed")}">${v.commit}</span>` : ""}</span>
     <span class="foot-links">

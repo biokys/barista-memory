@@ -1,0 +1,28 @@
+name: Barista Memory
+version: "0.1.0"
+slug: barista_memory
+description: Shot archive and brewing context for a GaggiMate espresso machine
+url: https://github.com/biokys/barista-memory
+arch:
+  - aarch64
+  - amd64
+image: ghcr.io/biokys/barista-memory-{arch}
+startup: services
+boot: auto
+ingress: true
+ingress_port: 8080
+panel_icon: mdi:coffee
+panel_title: Barista Memory
+# Direct LAN access on top of ingress, off unless the user maps it.
+ports:
+  8080/tcp: null
+ports_description:
+  8080/tcp: Web UI without Home Assistant login (LAN only)
+options:
+  machine_host: ""
+  poll_interval: 30
+  sync_notes: true
+schema:
+  machine_host: str
+  poll_interval: int(5,600)
+  sync_notes: bool

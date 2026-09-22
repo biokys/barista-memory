@@ -48,8 +48,11 @@ const db = openDatabase(config.databasePath);
 const VERSION = (() => {
   let version = "0.0.0";
   try { version = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8")).version; } catch {}
-  let commit = "";
-  try { commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim(); } catch {}
+  // A container has no .git; the Dockerfile bakes the commit in as an env var.
+  let commit = process.env.BARISTA_COMMIT ?? "";
+  if (!commit) {
+    try { commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd: ROOT, encoding: "utf8" }).trim(); } catch {}
+  }
   return { version, commit, node: process.version };
 })();
 

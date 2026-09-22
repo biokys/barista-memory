@@ -174,6 +174,40 @@ placeholders) on any always-on Linux box — it was built on a Raspberry Pi, but
 nothing depends on that — and back the database up with `deploy/backup-db.sh`:
 the archive is the only durable copy of your shots.
 
+### Docker (the easiest way to run it)
+
+One image holds the daemon and the web UI; the archive lives in a volume.
+Put it on something that stays on — a Raspberry Pi, a NAS, a home server —
+so the machine's warm-up is sampled around the clock.
+
+```bash
+docker run -d --name barista-memory --restart unless-stopped \
+  -p 8080:8080 -v barista-memory:/data \
+  -e GAGGIMATE_HOST=192.168.1.50 \
+  ghcr.io/biokys/barista-memory
+```
+
+Use the machine's IP, not `gaggimate.local`: a container cannot resolve mDNS
+names unless it shares the host's network. `docker-compose.yml` in this
+repository is the same thing with the settings spelled out. The web UI is
+then at `http://<host>:8080` — it has no login of its own, so keep that port
+on your LAN. The MCP server runs inside the container too:
+
+```bash
+claude mcp add barista-memory -- docker exec -i barista-memory node dist/mcp/server.js
+```
+
+### Home Assistant add-on
+
+The same image packaged as an add-on, with Home Assistant's login in front
+of the web UI (ingress) and the archive in Home Assistant's backups.
+
+1. Settings → Add-ons → Add-on store → ⋮ → Repositories, add
+   `https://github.com/biokys/barista-memory`.
+2. Install **Barista Memory**, enter the machine's IP under Configuration,
+   start it.
+3. It appears in the sidebar.
+
 ### The web UI
 
 `npm run web` serves a dark, phone-first interface on port 8080 (`GAGGIMATE_WEB_PORT`):

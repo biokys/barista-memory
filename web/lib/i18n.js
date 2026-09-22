@@ -12,7 +12,7 @@ export async function initI18n() {
 }
 
 async function load() {
-  const res = await fetch(`/i18n/${lang}.json`, { cache: "no-cache" });
+  const res = await fetch(`i18n/${lang}.json`, { cache: "no-cache" });
   dict = await res.json();
 }
 
