@@ -173,15 +173,10 @@ npm run cli -- calibrate                   # bloom temperature vs. settledness, 
 ./scripts/archive.sh show|stats|ingest|set-setup|fix-setup|recompute|recompute-context   # same, against the Pi
 ```
 
-Deploy to the Pi (there is no CI; this is the whole pipeline) — concrete host
-and path are in `CLAUDE.local.md`:
-
-```bash
-tar czf - --exclude node_modules --exclude .git src dist package.json tsconfig.json \
-  | ssh <user>@<pi> "tar xzf - -C <deploy dir>"
-ssh <user>@<pi> "cd <deploy dir> && npm run build && sudo systemctl restart barista-memory"
-journalctl -u barista-memory -f     # on the Pi
-```
+Deploy to the Pi: **commit, push, `npm run deploy`** (`scripts/deploy.sh`,
+host and path from `.env`). The Pi is a git checkout of `origin/main`; the
+script refuses an unclean or unpushed tree here and refuses to pull over local
+edits there. Do not tar files over — that is how the old vendored copies drifted.
 
 The MCP server is reached over ssh stdio, so it needs no port; see
 `deploy/README.md`.

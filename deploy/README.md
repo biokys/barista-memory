@@ -3,17 +3,27 @@
 The archive runs where the data must outlive the machine — on the Pi, not on the
 GaggiMate, whose flash is cleared by a firmware update.
 
-```bash
-# from the project root
-tar czf - --exclude node_modules --exclude .git src package.json tsconfig.json \
-  | ssh <user>@<pi> "mkdir -p ~/barista-memory && tar xzf - -C ~/barista-memory"
-ssh <user>@<pi> "cd ~/barista-memory && npm install && npm run build"
+The Pi runs a **git checkout**, so what is deployed is always a commit you can
+name, and a stray edit made on the Pi shows up as a dirty tree rather than a
+silent divergence.
 
+```bash
+# once, on the Pi (it needs read access to the repo — a deploy key is enough)
+git clone git@github.com:biokys/barista-memory.git ~/barista-memory
+cd ~/barista-memory && npm ci && npm run build
+
+# fill in <user> and <machine-ip>, then
 sudo cp deploy/barista-memory.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now barista-memory
 journalctl -u barista-memory -f
 ```
+
+## Every deploy after that
+
+From the laptop, with `.env` filled in: `npm run deploy`. It refuses an
+unclean or unpushed tree, pulls `origin/main` on the Pi, refuses to pull over
+local edits there, builds, restarts the service and confirms it is active.
 
 ## Using the MCP server from Claude Code
 

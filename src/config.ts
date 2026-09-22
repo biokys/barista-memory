@@ -15,7 +15,7 @@ export const config = {
   /** "ws" or "wss"; the HTTP scheme follows from it. */
   deviceProtocol: process.env.GAGGIMATE_PROTOCOL === "wss" ? "wss" : "ws",
   /** Path to the SQLite file. Must be on storage that outlives the device. */
-  databasePath: process.env.GAGGIMATE_DB ?? "./gaggimate-archive.db",
+  databasePath: process.env.GAGGIMATE_DB ?? "./barista-memory.db",
   /** Seconds between ingest passes in daemon mode. */
   pollIntervalS: Number(process.env.GAGGIMATE_POLL_INTERVAL ?? 30),
   /** Milliseconds before a device request is abandoned. */

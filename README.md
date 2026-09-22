@@ -144,25 +144,59 @@ Two firmware behaviours constrain this, both handled in `notesSync.ts`:
 This is convenience, not backup: those notes live in the same flash that an
 update clears. The archive is the durable copy.
 
-## Usage
+## Getting started
+
+Needs Node 22.5 or newer (`node:sqlite` is built in — no native modules, so it
+builds on an ARM Pi), and a GaggiMate on the same network.
 
 ```bash
-npm install && npm run build
+git clone https://github.com/biokys/barista-memory.git && cd barista-memory
+npm ci && npm run build
 
-# what am I pulling right now
-npm run cli -- show
+export GAGGIMATE_HOST=192.168.1.50        # your machine's IP; .local is slow to resolve
+export GAGGIMATE_DB=./data/archive.db
 
-# changed the grind, nothing else
-npm run cli -- set-setup --grind 3.0
-
-# new beans
-npm run cli -- set-setup --bean "Rwanda Kinini" --roaster Doubleshot --grind 3.4
-
-npm run cli -- ingest      # one pass
-npm run daemon             # poll forever (what systemd runs)
+npm run cli -- ingest                     # copy every shot the machine holds
+npm run cli -- set-setup --bean "Rwanda Kinini" --grind 12.5 --dose 18
+npm run cli -- show                       # what context is in force
+npm run cli -- status                     # the machine right now
+npm run daemon                            # keep going: poll, archive, sample state
 ```
 
-Deployment and MCP registration: see `deploy/README.md`.
+Run the daemon permanently with `deploy/barista-memory.service` (fill in the
+placeholders), and back the database up with `deploy/backup-db-pi.sh` — the
+archive is the only durable copy of your shots.
+
+### Using it from an AI assistant
+
+`src/mcp/server.ts` is an MCP server over stdio. It reads and writes the
+archive, reads the machine's live state, and is the one place that changes
+the machine (profiles). With Claude Code, on the box that runs the daemon:
+
+```bash
+claude mcp add barista-memory -- \
+  env GAGGIMATE_HOST=192.168.1.50 GAGGIMATE_DB=/path/to/archive.db node dist/mcp/server.js
+```
+
+or from another machine, over ssh stdio — no port to open:
+
+```bash
+claude mcp add barista-memory -- ssh user@pi \
+  'cd ~/barista-memory && GAGGIMATE_HOST=… GAGGIMATE_DB=… node --no-warnings dist/mcp/server.js'
+```
+
+Nineteen tools: the archive (`query_shots`, `get_archived_shot`, `rate_shot`),
+brewing context (`get_current_setup`, `set_current_setup`, `move_setup`,
+`update_setup`), the machine (`machine_now`, `machine_timeline`,
+`machine_temperature_history`, `get_machine_settings`, `list_profiles`,
+`get_profile`, `save_profile`) and maintenance (`ingest_now`,
+`recompute_stable_weights`, `recompute_machine_context`).
+
+### Day to day, from a laptop
+
+`scripts/archive.sh` runs the CLI on the Pi over ssh (`show`, `status`,
+`last`, `set-setup`, `calibrate`, …) and `scripts/deploy.sh` ships a pushed
+commit there and restarts the daemon. Both read `.env` — copy `.env.example`.
 
 ## Configuration
 
@@ -170,7 +204,7 @@ Deployment and MCP registration: see `deploy/README.md`.
 |---|---|---|
 | `GAGGIMATE_HOST` | `gaggimate.local` | Machine address. Prefer an IP — mDNS can take seconds. |
 | `GAGGIMATE_PROTOCOL` | `ws` | `ws` or `wss`; the HTTP scheme follows. |
-| `GAGGIMATE_DB` | `./gaggimate-archive.db` | SQLite file. Put it on storage that outlives the machine. |
+| `GAGGIMATE_DB` | `./barista-memory.db` | SQLite file. Put it on storage that outlives the machine. |
 | `GAGGIMATE_POLL_INTERVAL` | `30` | Seconds between passes in daemon mode. |
 | `GAGGIMATE_TIMEOUT_MS` | `10000` | Per-request timeout against the machine. |
 | `GAGGIMATE_SYNC_NOTES` | `1` | `0` leaves the machine's notes untouched. |
