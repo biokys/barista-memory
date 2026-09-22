@@ -60,7 +60,7 @@ p { margin: 0; }
 .live::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--text-3); }
 .live.on { color: var(--text-2); } .live.on::before { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
 .live.heating::before { background: var(--temp); box-shadow: 0 0 8px var(--temp); }
-.lang { background: none; border: 1px solid var(--line-2); border-radius: 999px; padding: 4px 10px; font-size: .78rem; color: var(--text-2); cursor: pointer; letter-spacing: .04em; }
+.lang { background-color: transparent; border: 1px solid var(--line-2); border-radius: 999px; padding: 4px 10px; font-size: .78rem; color: var(--text-2); cursor: pointer; letter-spacing: .04em; }
 .lang:hover { border-color: var(--accent); color: var(--text); }
 /* Narrow screens: the word mark and the live badge give way so every nav item
    stays reachable. Placed after the rules it overrides — same specificity,
@@ -140,15 +140,15 @@ p { margin: 0; }
 .form { display: grid; gap: 12px; }
 .field { display: grid; gap: 5px; }
 .field label { font-size: .76rem; color: var(--text-3); text-transform: uppercase; letter-spacing: .06em; }
-.field input, .field select, .field textarea { background: var(--bg-2); border: 1px solid var(--line-2); border-radius: var(--radius-s); padding: 10px 12px; outline: none; width: 100%; }
+.field input, .field select, .field textarea { background-color: var(--bg-2); border: 1px solid var(--line-2); border-radius: var(--radius-s); padding: 10px 12px; outline: none; width: 100%; }
 .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217,160,102,.15); }
-.field input[type=range] { padding: 0; background: none; border: none; accent-color: var(--accent); }
+.field input[type=range] { padding: 0; background-color: transparent; border: none; accent-color: var(--accent); }
 .field .range-v { font-size: 1.6rem; font-weight: 580; letter-spacing: -0.02em; }
-.btn { background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--radius-s); padding: 10px 16px; cursor: pointer; font-weight: 520; transition: .15s; }
+.btn { background-color: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--radius-s); padding: 10px 16px; cursor: pointer; font-weight: 520; transition: .15s; }
 .btn:hover { border-color: var(--accent); }
-.btn.primary { background: var(--accent); color: #1a120a; border-color: var(--accent); }
-.btn.primary:hover { background: var(--accent-2); }
-.btn.ghost { background: none; }
+.btn.primary { background-color: var(--accent); color: #1a120a; border-color: var(--accent); }
+.btn.primary:hover { background-color: var(--accent-2); }
+.btn.ghost { background-color: transparent; }
 .btn:disabled { opacity: .5; cursor: default; }
 .btn.sm { padding: 6px 11px; font-size: .84rem; }
 .toast { position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%); background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 999px; padding: 10px 18px; font-size: .9rem; box-shadow: 0 10px 40px rgba(0,0,0,.5); z-index: 20; animation: rise .25s ease; }
@@ -192,9 +192,9 @@ td.r, th.r { text-align: right; }
 .fade { animation: fade .3s ease; } @keyframes fade { from { opacity: 0; transform: translateY(4px); } }
 
 /* Selects everywhere: our own chevron with room around it, instead of the
-   native one glued to the right edge. Last in the file on purpose — .btn and
-   .field select set `background:` as a shorthand, which wipes background-image
-   from any rule that came before it. */
+   native one glued to the right edge. Every other rule that colours a select
+   uses background-color, never the shorthand: a class selector outranks this
+   one, and the shorthand would reset the image regardless of file order. */
 select { appearance: none; -webkit-appearance: none; padding-right: 34px !important; cursor: pointer;
          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%23a69d8e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
          background-repeat: no-repeat; background-position: right 13px center; background-size: 12px 8px; }
