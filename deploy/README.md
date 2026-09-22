@@ -44,7 +44,7 @@ a backup host over ssh, keeping the last 30. Install:
 
 ```bash
 sudo apt-get install -y sqlite3
-cp deploy/backup-db-pi.sh ~/barista-memory/backup-db.sh && chmod +x ~/barista-memory/backup-db.sh
+chmod +x ~/barista-memory/deploy/backup-db-pi.sh   # it ships with the checkout
 # a key for the backup host, then in the Pi's crontab:
-17 4 * * * BACKUP_DEST=<user@backup-host>:backups/barista-memory ~/barista-memory/backup-db.sh >> ~/barista-memory/data/backup.log 2>&1
+17 4 * * * BACKUP_DEST=<user@backup-host>:backups/barista-memory ~/barista-memory/deploy/backup-db-pi.sh >> ~/barista-memory/data/backup.log 2>&1
 ```
