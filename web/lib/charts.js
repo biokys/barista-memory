@@ -1,4 +1,5 @@
 // uPlot wrappers with the app's dark theme. uPlot is a global (IIFE build).
+import { t } from "./i18n.js";
 
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
@@ -27,17 +28,17 @@ function readout(plot, container, meta) {
   const row = document.createElement("div");
   row.className = "readout";
   row.innerHTML = `<span class="x"></span>` + meta.map((m, i) =>
-    `<span class="s" data-i="${i}"><i style="background:${m.color}"></i><b></b><em>${m.label}</em></span>`).join("");
+    `<span class="s" data-i="${i}"><em style="color:${m.color}">${m.name}</em><b></b><u>${m.label}</u></span>`).join("");
   container.appendChild(row);
   const cells = [...row.querySelectorAll(".s b")];
   const xCell = row.querySelector(".x");
-  const idle = () => { xCell.textContent = ""; meta.forEach((m, i) => (cells[i].textContent = m.idle ?? "–")); };
+  const idle = () => { xCell.textContent = ""; xCell.hidden = true; meta.forEach((m, i) => (cells[i].textContent = m.idle ?? "–")); };
   idle();
   plot.hooks.setCursor = plot.hooks.setCursor || [];
   plot.hooks.setCursor.push((u) => {
     const idx = u.cursor.idx;
     if (idx == null) return idle();
-    xCell.textContent = meta[0].x ? meta[0].x(u.data[0][idx]) : "";
+    xCell.textContent = meta[0].x ? meta[0].x(u.data[0][idx]) : ""; xCell.hidden = !xCell.textContent;
     meta.forEach((m, i) => { const v = u.data[m.series][idx]; cells[i].textContent = v == null ? "–" : m.fmt(v); });
   });
   return row;
@@ -56,7 +57,7 @@ function responsive(plot, container) {
  * Phases drawn as faint bands behind everything. `compare` overlays a second
  * shot's pressure and flow, dimmed.
  */
-export function shotChart(container, shot, compare = null) {
+export function shotChart(container, shot, compare = null, { stableWeight = null } = {}) {
   const c = colors();
   const pts = shot.full_curve;
   const x = pts.map((p) => p.time_seconds);
@@ -119,15 +120,18 @@ export function shotChart(container, shot, compare = null) {
     },
   }, data, container);
   const sm = shot.summary || {};
+  // Idle figures: peak pressure, mean flow and temperature, and the shot's
+  // stable weight — not the curve's maximum, which on a self-taring scale is
+  // the pre-tare reading from the first second (181.8 g on shot 415).
   const meta = [
-    { series: 1, label: "bar", color: c.pressure, fmt: (v) => v.toFixed(1), idle: sm.pressure ? `⌃ ${sm.pressure.max_bar.toFixed(1)}` : "–", x: (t) => `${t.toFixed(1)} s` },
-    { series: 2, label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(2), idle: sm.flow ? `⌀ ${sm.flow.average_flow_rate_ml_s.toFixed(2)}` : "–" },
-    { series: 3, label: "°C", color: c.temp, fmt: (v) => v.toFixed(1), idle: sm.temperature ? `⌀ ${sm.temperature.average_celsius.toFixed(1)}` : "–" },
-    { series: 4, label: "g", color: c.weight, fmt: (v) => v.toFixed(1), idle: (() => { const w = data[4].filter((v) => v != null); return w.length ? `→ ${Math.max(...w).toFixed(1)}` : "–"; })() },
+    { series: 1, name: t("shot.pressure"), label: "bar", color: c.pressure, fmt: (v) => v.toFixed(1), idle: sm.pressure ? `⌃ ${sm.pressure.max_bar.toFixed(1)}` : "–", x: (x) => `${x.toFixed(1)} s` },
+    { series: 2, name: t("shot.flow"), label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(2), idle: sm.flow ? `⌀ ${sm.flow.average_flow_rate_ml_s.toFixed(2)}` : "–" },
+    { series: 3, name: t("shot.temperature"), label: "°C", color: c.temp, fmt: (v) => v.toFixed(1), idle: sm.temperature ? `⌀ ${sm.temperature.average_celsius.toFixed(1)}` : "–" },
+    { series: 4, name: t("shot.weight"), label: "g", color: c.weight, fmt: (v) => v.toFixed(1), idle: stableWeight != null ? `→ ${stableWeight.toFixed(1)}` : "–" },
   ];
   if (compare?.full_curve) meta.push(
-    { series: 5, label: "bar ⁽²⁾", color: c.pressure, fmt: (v) => v.toFixed(1), idle: "" },
-    { series: 6, label: "ml/s ⁽²⁾", color: c.flow, fmt: (v) => v.toFixed(2), idle: "" });
+    { series: 5, name: t("shot.pressure") + " ⁽²⁾", label: "bar", color: c.pressure, fmt: (v) => v.toFixed(1), idle: "" },
+    { series: 6, name: t("shot.flow") + " ⁽²⁾", label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(2), idle: "" });
   readout(plot, container, meta);
   return responsive(plot, container);
 }
@@ -188,8 +192,8 @@ export function machineChart(container, samples, shots, sessions, events = []) {
   }, data, container);
   const last = [...samples].reverse().find((s) => s.reachable && s.current_temp != null);
   readout(plot, container, [
-    { series: 1, label: "°C", color: c.temp, fmt: (v) => v.toFixed(1), idle: last ? `${last.current_temp.toFixed(1)}` : "–", x: (t) => new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
-    { series: 2, label: "target", color: c.faint, fmt: (v) => String(v), idle: last && last.target_temp > 0 ? String(last.target_temp) : "–" },
+    { series: 1, name: t("shot.temperature"), label: "°C", color: c.temp, fmt: (v) => v.toFixed(1), idle: last ? `${last.current_temp.toFixed(1)}` : "–", x: (x) => new Date(x * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) },
+    { series: 2, name: t("machine.target"), label: "°C", color: c.faint, fmt: (v) => String(v), idle: last && last.target_temp > 0 ? String(last.target_temp) : "–" },
   ]);
   return responsive(plot, container);
 }
@@ -214,7 +218,7 @@ export function scatterChart(container, xs, ys, groups, labels, { xLabel, yLabel
     series,
   }, data, container);
   const row = document.createElement("div"); row.className = "readout";
-  row.innerHTML = uniq.map((g, i) => `<span class="s"><i style="background:${palette[i % palette.length]}"></i><em>${labels?.[g] ?? g}</em></span>`).join("");
+  row.innerHTML = uniq.map((g, i) => `<span class="s"><em style="color:${palette[i % palette.length]}">${labels?.[g] ?? g}</em></span>`).join("");
   container.appendChild(row);
   return responsive(plot, container);
 }

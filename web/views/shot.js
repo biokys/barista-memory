@@ -78,7 +78,7 @@ export async function renderShot(view, [id]) {
 
   let destroy = null;
   const container = view.querySelector("#chart");
-  const draw = (compare) => { if (destroy) destroy(); destroy = shot ? shotChart(container, shot, compare) : null; };
+  const draw = (compare) => { if (destroy) destroy(); destroy = shot ? shotChart(container, shot, compare, { stableWeight: c.stable_weight_g }) : null; };
   draw(null);
 
   // Comparison candidates: same bean if any, else the neighbours.
