@@ -74,7 +74,23 @@ export async function renderSettings(view) {
           <div class="card-head"><h2>${t("receipt.preview")}</h2>${lastId ? `<a class="btn sm ghost" href="api/shots/${lastId}/receipt.png" target="_blank" rel="noopener">PNG</a>` : ""}</div>
           ${lastId ? `<img id="rc-preview" class="receipt-preview" src="api/shots/${lastId}/receipt.png?ts=${Date.now()}" alt="">` : `<p class="empty">${t("now.none")}</p>`}
         </section>
-      </div>` : ""}`;
+      </div>` : ""}
+      <section class="card">
+        <div class="card-head"><h2>${t("transfer.title")}</h2><a class="btn sm ghost" href="api/export">${t("transfer.export")}</a></div>
+        <p class="muted small" style="max-width:70ch">${t("transfer.hint")}</p>
+        <div class="row" style="margin-top:10px"><input type="file" id="import-file" accept=".db,application/vnd.sqlite3,application/octet-stream"><button class="btn sm" id="import-go">${t("transfer.import")}</button></div>
+      </section>`;
+    view.querySelector("#import-go")?.addEventListener("click", async (e) => {
+      const file = view.querySelector("#import-file").files[0];
+      if (!file) return;
+      if (!confirm(t("transfer.confirm", { name: file.name }))) return;
+      const button = e.currentTarget; button.disabled = true;
+      try {
+        const r = await api.importArchive(file);
+        toast(t("transfer.done", { shots: r.counts.shots }));
+        setTimeout(() => location.reload(), 1200);
+      } catch (err) { toast(t("transfer.failed") + " " + err.message, "bad"); button.disabled = false; }
+    });
     view.querySelector("#scale-scan")?.addEventListener("click", async () => {
       try { await api.scanScales(); toast(t("scale.scanning")); setTimeout(load, 6000); } catch (err) { toast(String(err.message), "bad"); }
     });

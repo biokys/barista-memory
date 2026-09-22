@@ -11,6 +11,7 @@ import { listProfiles, getProfile, fetchRawSettings, scaleInfo, scaleList, scale
 import { renderShotReceipt } from "../receipt.js";
 import { printShot, printTest, printerStatus, printerSettings, updatePrinterSettings, findPrinters } from "../printer/index.js";
 import { bluetoothAvailable } from "../printer/bluez.js";
+import { exportArchive, importArchive } from "../transfer.js";
 import { liveStatus, machineReachable } from "../liveStatus.js";
 import { groupSettings } from "../device/machineSettings.js";
 import { currentConditions, powerSessions, allStateSamples, type StateRow } from "../machineState.js";
@@ -185,6 +186,32 @@ route("GET", "/api/shots/:id/receipt.svg", async (_req, res, p) => {
 route("POST", "/api/shots/:id/print", async (_req, res, p) => {
   const result = await printShot(db, Number(p.id));
   json(res, result.ok ? 200 : result.code === "NOT_FOUND" ? 404 : 502, result);
+});
+
+route("GET", "/api/export", async (_req, res) => {
+  const bytes = exportArchive(db);
+  res.writeHead(200, {
+    "Content-Type": "application/vnd.sqlite3",
+    "Content-Disposition": `attachment; filename="barista-memory-${new Date().toISOString().slice(0, 10)}.db"`,
+    "Content-Length": bytes.length,
+  });
+  res.end(Buffer.from(bytes));
+});
+
+// Replaces this archive with the uploaded one; the UI asks for confirmation.
+route("POST", "/api/import", async (req, res) => {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length;
+    if (size > 512 * 1024 * 1024) return json(res, 413, { error: "TOO_LARGE" });
+    chunks.push(chunk as Buffer);
+  }
+  try {
+    json(res, 200, importArchive(db, Buffer.concat(chunks)));
+  } catch (error) {
+    json(res, 400, { error: "IMPORT_FAILED", message: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 route("GET", "/api/printer", async (_req, res) => {

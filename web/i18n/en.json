@@ -288,5 +288,12 @@
   "receipt.preview": "Preview of the last receipt",
   "nav.settings": "Settings",
   "settings.title": "Settings",
-  "settings.hint": "The receipt printer, what the receipt says, and the machine's scale. Everything else is set on the machine or through environment variables."
+  "settings.hint": "The receipt printer, what the receipt says, and the machine's scale. Everything else is set on the machine or through environment variables.",
+  "transfer.title": "Archive transfer",
+  "transfer.export": "Download archive",
+  "transfer.hint": "Download the archive as one file and upload it into another installation (say, from a Raspberry Pi into the Home Assistant add-on). Importing REPLACES everything in this installation with the file's contents.",
+  "transfer.import": "Upload and replace",
+  "transfer.confirm": "Replace this whole archive with “{name}”? This cannot be undone.",
+  "transfer.done": "Done, archive replaced ({shots} shots). Reloading…",
+  "transfer.failed": "Import failed."
 }

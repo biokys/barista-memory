@@ -288,5 +288,12 @@
   "receipt.preview": "Náhled poslední účtenky",
   "nav.settings": "Nastavení",
   "settings.title": "Nastavení",
-  "settings.hint": "Tiskárna účtenek, podoba účtenky a váha stroje. Vše ostatní se řídí ze stroje nebo z proměnných prostředí."
+  "settings.hint": "Tiskárna účtenek, podoba účtenky a váha stroje. Vše ostatní se řídí ze stroje nebo z proměnných prostředí.",
+  "transfer.title": "Přenos archivu",
+  "transfer.export": "Stáhnout archiv",
+  "transfer.hint": "Stáhni archiv jako jeden soubor a nahraj ho do jiné instalace (třeba z Raspberry Pi do doplňku Home Assistantu). Import NAHRADÍ všechna data v této instalaci obsahem souboru.",
+  "transfer.import": "Nahrát a nahradit",
+  "transfer.confirm": "Nahradit celý zdejší archiv souborem „{name}“? Tohle nejde vrátit.",
+  "transfer.done": "Hotovo, archiv nahrazen ({shots} shotů). Načítám znovu…",
+  "transfer.failed": "Import se nepovedl."
 }

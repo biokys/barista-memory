@@ -34,6 +34,12 @@ export const api = {
   deleteEvent: (id) => call("DELETE", `api/events/${id}`),
   ingest: () => call("POST", "api/ingest"),
   maintenance: () => call("GET", "api/maintenance"),
+  importArchive: async (file) => {
+    const res = await fetch("api/import", { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: file });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || data.error || `${res.status}`);
+    return data;
+  },
   printer: () => call("GET", "api/printer"),
   updatePrinter: (change) => call("PATCH", "api/printer", change),
   scanPrinters: () => call("POST", "api/printer/scan"),

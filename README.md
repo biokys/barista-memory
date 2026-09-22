@@ -143,6 +143,12 @@ the Machine page, test, switch on "print every shot". `cli print [id]`,
 `cli printer-test`, the `print_receipt` MCP tool and a Home Assistant button
 entity do the same.
 
+### Moving the archive
+
+Settings → Archive transfer downloads the whole archive as one SQLite file
+(a consistent copy) and uploads one into another installation, replacing
+its contents — how a Pi's archive moves into the Home Assistant add-on.
+
 ### The web UI
 
 The container serves the web UI on port 8080; from source it is `npm run web`
