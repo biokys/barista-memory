@@ -5,10 +5,11 @@ Guidance for Claude Code working in this repository (barista-memory).
 ## What this is
 
 A durable shot archive and brewing context for a GaggiMate espresso machine
-(Gaggia Classic Pro E24, DF64 grinder). It exists because the machine keeps at
-most 100 shots in internal flash and that flash does not survive a firmware
-update — the id counter was at 409 with 7 shots left, so roughly four hundred
-were already lost.
+(Gaggia Classic Pro E24, DF64 grinder). It exists to keep every shot in a
+database the user owns, with context the machine cannot know. (The original
+motivation was a 100-shot limit in the firmware of the time — the id counter
+was at 409 with 7 left; the GaggiMate community says current firmware has no
+such limit, so do not repeat that claim in public material.)
 
 It runs on a Raspberry Pi, not on the machine. Read `README.md` for the design;
 this file is about what bites you while changing it.

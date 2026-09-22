@@ -14,8 +14,8 @@ import { dirname, join } from "node:path";
  * Poll the device forever, archiving whatever is new.
  *
  * A failed pass is logged and the loop continues: the machine being off, or the
- * network being down, is the normal state most of the day, and the device holds
- * 100 shots of slack before anything can actually be lost.
+ * network being down, is the normal state most of the day, and the device keeps
+ * its own history, so a missed pass is caught up by the next one.
  */
 async function main(): Promise<void> {
   const db = openDatabase(config.databasePath);

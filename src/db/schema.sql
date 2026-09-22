@@ -1,8 +1,7 @@
 -- Local archive of GaggiMate espresso shots and the brewing context they were
 -- pulled under.
 --
--- The machine stores at most MAX_HISTORY_ENTRIES (100) shots in flash and that
--- flash does not survive a firmware update, so this database — living on a
+-- The machine keeps its history in its own flash; this database — living on a
 -- different machine — is the durable record. Everything here is either copied
 -- from the device before it rotates out, or is context the device never had.
 

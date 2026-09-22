@@ -6,12 +6,13 @@ espresso machine.
 
 ![Home: machine warm-up, what is being ground, maintenance, last shot](docs/now.png)
 
-The GaggiMate keeps its last 100 shots in flash, and a firmware update clears
-them. barista-memory runs beside the machine (a Raspberry Pi, a NAS, Home
-Assistant) and keeps all of them, with the context the machine cannot know:
+The GaggiMate keeps its shot history in its own flash. barista-memory runs
+beside the machine (a Raspberry Pi, a NAS, Home Assistant) and keeps a copy
+of every shot in a database you own, with the context the machine cannot
+know:
 
-- **Every shot, forever.** Raw shot logs are archived as they happen, before
-  the rotation or an update loses them. Nothing is ever re-typed.
+- **Every shot, in your own database.** Raw shot logs are archived as they
+  happen and backed up like any file. Nothing is ever re-typed.
 - **Beans, grind and dose as periods.** Record a change once; every later
   shot inherits it. Realising the grind changed two shots earlier is one edit.
 - **A cup weight you can trust.** The Bluetooth scale corrupts the last
@@ -212,12 +213,10 @@ commit there and restarts the daemon. Both read `.env` — copy `.env.example`.
 
 ### Why this exists
 
-The machine keeps at most 100 shots (`MAX_HISTORY_ENTRIES` in
-`ShotHistoryPlugin.h`) in internal flash, and without an SD card that flash does
-not survive a firmware update. On this machine the shot id counter had reached
-409 while only 7 shots remained — roughly four hundred shots had already been
-lost. The archive lives on a Raspberry Pi instead, so the record outlives both
-the rotation and the upgrade.
+The machine's shot history lives in the machine. This archive lives outside
+it — on a Raspberry Pi, a NAS or Home Assistant — in a SQLite file that is
+backed up like any other, and it holds the raw log of every shot, so a later
+fix to the parser re-derives every shot ever stored.
 
 It also removes the per-shot data entry. Beans, grind setting and dose change
 once every many shots, so they are stored as periods rather than as fields on

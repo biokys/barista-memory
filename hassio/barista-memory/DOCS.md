@@ -2,8 +2,8 @@
 
 A durable shot archive for a GaggiMate espresso machine, with the beans and
 grind in force at the time of each shot, how warm the machine really was, and
-maintenance reminders. The machine itself keeps only its last 100 shots and
-loses them on a firmware update; this add-on keeps all of them.
+maintenance reminders. The add-on keeps every shot in its own database,
+included in Home Assistant backups.
 
 ## Setup
 

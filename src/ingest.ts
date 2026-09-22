@@ -103,8 +103,8 @@ export interface IngestResult {
  * The set of missing ids is computed by difference against the archive rather
  * than from a high-water mark. That matters twice: a gap left by the archiver
  * being down is filled on the next pass rather than skipped forever, and a
- * device whose shot ids restarted (a firmware update clears the log but the id
- * counter lives in NVS) does not silently stop being archived.
+ * device whose shot ids restarted (a reset, a replaced controller) does not
+ * silently stop being archived.
  */
 export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
   const entries = await fetchIndex();
