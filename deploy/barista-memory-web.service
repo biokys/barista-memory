@@ -1,0 +1,23 @@
+[Unit]
+Description=barista-memory web UI (history, statistics, machine state, brewing context)
+After=network-online.target barista-memory.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=<user>
+WorkingDirectory=/home/<user>/barista-memory
+Environment=GAGGIMATE_HOST=<machine-ip>
+Environment=GAGGIMATE_DB=/home/<user>/barista-memory/data/archive.db
+# LAN or tailnet only. There is no login: anyone reaching this port can
+# change the grind setting and save profiles.
+Environment=GAGGIMATE_WEB_PORT=8080
+Environment=NODE_OPTIONS=--no-warnings
+ExecStart=/usr/bin/node dist/web/server.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

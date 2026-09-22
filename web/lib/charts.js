@@ -1,0 +1,165 @@
+// uPlot wrappers with the app's dark theme. uPlot is a global (IIFE build).
+
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+export const colors = () => ({
+  pressure: css("--pressure"), flow: css("--flow"), temp: css("--temp"), weight: css("--weight"),
+  text: css("--text-2"), grid: css("--line"), faint: css("--text-3"), accent: css("--accent"),
+});
+
+function axis(extra = {}) {
+  const c = colors();
+  return {
+    stroke: c.faint, grid: { stroke: c.grid, width: 1 }, ticks: { stroke: c.grid, width: 1, size: 4 },
+    font: "11px " + css("--font"), labelFont: "11px " + css("--font"), gap: 6, ...extra,
+  };
+}
+
+/** Responsive: re-size on container width changes. Returns a cleanup fn. */
+function responsive(plot, container) {
+  const ro = new ResizeObserver(() => plot.setSize({ width: container.clientWidth, height: plot.height }));
+  ro.observe(container);
+  return () => { ro.disconnect(); plot.destroy(); };
+}
+
+/**
+ * Shot curves: pressure + flow on the left axis (bar / ml·s share a 0–12
+ * range naturally), temperature on the right, weight on a third hidden scale.
+ * Phases drawn as faint bands behind everything. `compare` overlays a second
+ * shot's pressure and flow, dimmed.
+ */
+export function shotChart(container, shot, compare = null) {
+  const c = colors();
+  const pts = shot.full_curve;
+  const x = pts.map((p) => p.time_seconds);
+  const data = [
+    x,
+    pts.map((p) => p.pressure_bar),
+    pts.map((p) => p.flow_ml_s),
+    pts.map((p) => p.temperature_c),
+    pts.map((p) => p.weight_g),
+  ];
+  const series = [
+    {},
+    { label: "bar", stroke: c.pressure, width: 2, scale: "y", value: (u, v) => (v == null ? "" : v.toFixed(1)) },
+    { label: "ml/s", stroke: c.flow, width: 1.5, dash: [5, 4], scale: "y", value: (u, v) => (v == null ? "" : v.toFixed(2)) },
+    { label: "°C", stroke: c.temp, width: 1.5, scale: "t", value: (u, v) => (v == null ? "" : v.toFixed(1)) },
+    { label: "g", stroke: c.weight, width: 1.5, scale: "w", value: (u, v) => (v == null ? "" : v.toFixed(1)) },
+  ];
+  if (compare?.full_curve) {
+    // Comparison is resampled onto this shot's time axis by nearest neighbour.
+    const cx = compare.full_curve.map((p) => p.time_seconds);
+    const pick = (key) => x.map((t) => {
+      let lo = 0, hi = cx.length - 1;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (cx[mid] < t) lo = mid + 1; else hi = mid; }
+      return t > cx[cx.length - 1] + 0.5 ? null : compare.full_curve[lo][key];
+    });
+    data.push(pick("pressure_bar"), pick("flow_ml_s"));
+    series.push(
+      { label: "bar ⁽²⁾", stroke: c.pressure, width: 1.5, alpha: 0.4, scale: "y", value: (u, v) => (v == null ? "" : v.toFixed(1)) },
+      { label: "ml/s ⁽²⁾", stroke: c.flow, width: 1, dash: [3, 4], alpha: 0.4, scale: "y", value: (u, v) => (v == null ? "" : v.toFixed(2)) },
+    );
+  }
+
+  const phases = shot.phases || [];
+  const bandColors = ["#4d6b8a", "#5c7b57", "#8a6a3a", c.accent, "#a06a4e"];
+
+  const plot = new uPlot({
+    width: container.clientWidth, height: 300,
+    cursor: { drag: { x: true, y: false } },
+    legend: { live: true },
+    scales: { x: { time: false }, y: { range: [0, 12] }, t: { range: (u, min, max) => [Math.floor(Math.min(min, 88) - 1), Math.ceil(Math.max(max, 96) + 1)] }, w: { range: [0, Math.max(50, ...data[4]) * 1.05] } },
+    axes: [
+      axis({ scale: "x", values: (u, v) => v.map((n) => n + " s") }),
+      axis({ scale: "y", side: 3, values: (u, v) => v.map((n) => n) }),
+      axis({ scale: "t", side: 1, grid: { show: false }, values: (u, v) => v.map((n) => n + "°") }),
+    ],
+    series,
+    hooks: {
+      drawClear: [(u) => {
+        const ctx = u.ctx; ctx.save();
+        phases.forEach((ph, i) => {
+          const x0 = u.valToPos(ph.start_time_seconds, "x", true);
+          const x1 = u.valToPos(ph.start_time_seconds + ph.duration_seconds, "x", true);
+          ctx.fillStyle = bandColors[i % bandColors.length]; ctx.globalAlpha = 0.09;
+          ctx.fillRect(x0, u.bbox.top, x1 - x0, u.bbox.height);
+          ctx.globalAlpha = 0.5; ctx.fillStyle = c.faint; ctx.font = "10px " + css("--font");
+          ctx.fillText(ph.name, x0 + 4, u.bbox.top + 12);
+        });
+        ctx.restore();
+      }],
+    },
+  }, data, container);
+  return responsive(plot, container);
+}
+
+/**
+ * Boiler temperature over hours: current temp, target as a faint step,
+ * unreachable stretches as grey bands, shots as amber ticks.
+ */
+export function machineChart(container, samples, shots, sessions) {
+  const c = colors();
+  const x = samples.map((s) => s.sampled_at);
+  const data = [
+    x,
+    samples.map((s) => (s.reachable ? s.current_temp : null)),
+    samples.map((s) => (s.reachable && s.target_temp > 0 ? s.target_temp : null)),
+  ];
+  const plot = new uPlot({
+    width: container.clientWidth, height: 280,
+    cursor: { drag: { x: true, y: false } },
+    scales: { x: { time: true }, y: { range: [15, 105] } },
+    axes: [
+      axis({ scale: "x" }),
+      axis({ scale: "y", values: (u, v) => v.map((n) => n + "°") }),
+    ],
+    series: [
+      { value: "{HH}:{mm}" },
+      { label: "°C", stroke: c.temp, width: 2, spanGaps: false, value: (u, v) => (v == null ? "–" : v.toFixed(1)) },
+      { label: "target", stroke: c.faint, width: 1, dash: [3, 4], spanGaps: false, value: (u, v) => (v == null ? "–" : v) },
+    ],
+    hooks: {
+      drawClear: [(u) => {
+        const ctx = u.ctx; ctx.save();
+        // Off periods: between a session's end and the next start.
+        const sorted = [...sessions].sort((a, b) => a.started_at - b.started_at);
+        for (let i = 0; i < sorted.length; i++) {
+          const end = sorted[i].ended_at; const next = sorted[i + 1]?.started_at;
+          if (end && next) {
+            ctx.fillStyle = c.faint; ctx.globalAlpha = 0.08;
+            ctx.fillRect(u.valToPos(end, "x", true), u.bbox.top, u.valToPos(next, "x", true) - u.valToPos(end, "x", true), u.bbox.height);
+          }
+        }
+        ctx.globalAlpha = 0.9;
+        for (const s of shots) {
+          const px = u.valToPos(s.started_at, "x", true);
+          ctx.strokeStyle = c.accent; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(px, u.bbox.top); ctx.lineTo(px, u.bbox.top + u.bbox.height); ctx.stroke();
+        }
+        ctx.restore();
+      }],
+    },
+  }, data, container);
+  return responsive(plot, container);
+}
+
+/** Scatter: x values, y values, per-point colour group index. */
+export function scatterChart(container, xs, ys, groups, labels, { xLabel, yLabel, time = false, yRange } = {}) {
+  const c = colors();
+  const palette = [c.accent, c.flow, c.weight, c.temp, "#c9a0dc", "#8fb8a8"];
+  const uniq = [...new Set(groups)];
+  const series = [{}];
+  const data = [xs];
+  for (const g of uniq) {
+    data.push(ys.map((y, i) => (groups[i] === g ? y : null)));
+    series.push({ label: labels?.[g] ?? String(g), stroke: palette[uniq.indexOf(g) % palette.length], paths: uPlot.paths.points({ size: 7 }), points: { show: true, size: 7 }, value: (u, v) => (v == null ? "" : v) });
+  }
+  const plot = new uPlot({
+    width: container.clientWidth, height: 260,
+    cursor: { drag: { x: false, y: false } },
+    scales: { x: { time }, y: yRange ? { range: yRange } : {} },
+    axes: [axis({ scale: "x", label: xLabel }), axis({ scale: "y", label: yLabel })],
+    series,
+  }, data, container);
+  return responsive(plot, container);
+}

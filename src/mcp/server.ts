@@ -4,13 +4,11 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from "@modelcontextprotocol/sdk/types.js";
 import { config } from "../config.js";
 import { openDatabase, currentSetup, type ShotContextRow } from "../db/db.js";
-import {
-  parseSlog, fetchStatus, listProfiles, getProfile, saveProfile, fetchRawSettings,
-  type Profile, type ProfilePhase,
-} from "../device/client.js";
+import { fetchStatus, listProfiles, getProfile, fetchRawSettings } from "../device/client.js";
+import { loadArchivedShot } from "../shots.js";
+import { saveProfileMerged } from "../profiles.js";
 import { groupSettings } from "../device/machineSettings.js";
 import { PHASE_ARRAY_SCHEMA } from "./profileSchema.js";
-import { transformShotForAI } from "../device/shotTransformer.js";
 import { recordSetup, moveSetup, updateSetup } from "../setups.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "../ingest.js";
 import { powerSessions, currentConditions, MODE_NAMES } from "../machineState.js";
@@ -353,42 +351,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "get_archived_shot": {
-        const shotId = args!.shot_id as number;
-        const context = db.prepare("SELECT * FROM shot_context WHERE id = ?").get(shotId) as
-          | ShotContextRow
-          | undefined;
-        if (!context) return fail(`Shot ${shotId} is not in the archive`, "SHOT_NOT_FOUND");
-
-        const row = db.prepare("SELECT raw_slog FROM shots WHERE id = ?").get(shotId) as
-          | { raw_slog: Uint8Array | null }
-          | undefined;
-
-        let curve: unknown = null;
-        if (row?.raw_slog) {
-          // Shape it exactly like a shot read live from the device, so the same
-          // reasoning applies whether a shot is still on the machine or not.
-          curve = transformShotForAI(
-            parseSlog(Buffer.from(row.raw_slog), shotId),
-            (args?.include_full_curve as boolean) ?? false
-          );
-        }
-
-        // Whether the machine was settled matters as much as the profile: a
-        // boiler still climbing overshoots, which shows up in the curve as a
-        // shot the profile never asked for. The values are the stored ones, so
-        // this answer and a SQL correlation over shot_context agree.
-        const machine =
-          context.machine_powered_for_s == null
-            ? null
-            : {
-                powered_for_s: context.machine_powered_for_s,
-                heating_for_s: context.machine_heating_for_s,
-                heatup_s: context.machine_heatup_s,
-                settled: context.machine_settled == null ? null : context.machine_settled === 1,
-                settledness: context.machine_settledness,
-              };
-
-        return ok({ context, machine, shot: curve });
+        const loaded = loadArchivedShot(db, args!.shot_id as number, (args?.include_full_curve as boolean) ?? false);
+        if (!loaded) return fail(`Shot ${args!.shot_id} is not in the archive`, "SHOT_NOT_FOUND");
+        return ok(loaded);
       }
 
       case "list_profiles": {
@@ -410,57 +375,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "save_profile": {
-        const spec = (args ?? {}) as any;
-        const profiles = await listProfiles();
-        if (!profiles) return fail(`No answer from ${config.deviceHost}`, "MACHINE_UNREACHABLE");
-
-        // Find what is being edited: an explicit id wins, then a matching label.
-        let existing: Profile | null = null;
-        if (spec.profile_id) {
-          const byId = profiles.find((p) => p.id === spec.profile_id);
-          if (!byId) return fail(`No profile with id "${spec.profile_id}"; call list_profiles for the ids that exist`, "PROFILE_NOT_FOUND");
-          existing = (await getProfile(byId.id)) ?? byId;
-        } else if (spec.label) {
-          const byLabel = profiles.find((p) => p.label === spec.label);
-          if (byLabel) existing = (await getProfile(byLabel.id)) ?? byLabel;
-        }
-        if (!existing && (!spec.label || spec.temperature == null || !spec.phases)) {
-          return fail("Creating a profile needs label, temperature and phases", "MISSING_PARAMETER");
-        }
-
-        // The machine replaces the whole profile, so build a complete one:
-        // the caller's fields over the existing profile over sane defaults.
-        // Merging is what keeps 'selected' and the description from being
-        // silently reset by an edit to one phase.
-        const temperature = spec.temperature ?? existing?.temperature ?? 94;
-        const phases: ProfilePhase[] = (spec.phases ?? existing?.phases ?? []).map((phase: any) => ({
-          name: phase.name,
-          phase: phase.phase ?? "brew",
-          // Per-phase valve state, not a constant: a hardcoded 1 makes backflush
-          // impossible, since that cycle is exactly the valve opening and closing.
-          valve: phase.valve ?? 1,
-          duration: phase.duration,
-          temperature: phase.temperature ?? temperature,
-          transition: phase.transition ?? { type: "linear", duration: Math.min(phase.duration, 2), adaptive: true },
-          pump: phase.pump ?? { target: "pressure", pressure: 9, flow: 0 },
-          targets: phase.targets ?? [],
-        }));
-
-        const profile: Profile = {
-          id: existing?.id ?? "",
-          label: spec.label ?? existing!.label,
-          type: spec.type ?? existing?.type ?? "pro",
-          description: spec.description ?? existing?.description ?? "",
-          temperature,
-          favorite: spec.favorite ?? existing?.favorite ?? false,
-          selected: existing?.selected ?? false,
-          utility: spec.utility ?? existing?.utility ?? false,
-          phases,
-        };
-
-        const result = await saveProfile(profile);
-        if (!result.ok) return fail(`Failed to save "${profile.label}": ${result.error}`, "SAVE_FAILED");
-        return ok({ profile: result.profile, action: existing ? "updated" : "created" });
+        const result = await saveProfileMerged({
+          profile_id: args?.profile_id as string | undefined, label: args?.label as string | undefined,
+          temperature: args?.temperature as number | undefined, phases: args?.phases as any[] | undefined,
+          type: args?.type as string | undefined, description: args?.description as string | undefined,
+          favorite: args?.favorite as boolean | undefined, utility: args?.utility as boolean | undefined,
+        });
+        if (!result.ok) return fail(result.message, result.code);
+        return ok({ profile: result.profile, action: result.action });
       }
 
       case "get_machine_settings": {

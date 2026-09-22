@@ -13,7 +13,7 @@ HERE="$(cd "$(dirname "$0")/.." && pwd)"
 [ -f "$HERE/.env" ] && { set -a; . "$HERE/.env"; set +a; }
 SERVER_HOST="${GAGGIMATE_SERVER_HOST:?set GAGGIMATE_SERVER_HOST in .env}"
 SERVER_DIR="${GAGGIMATE_SERVER_DIR:?set GAGGIMATE_SERVER_DIR in .env}"
-SERVICE="${GAGGIMATE_SERVICE:-barista-memory}"
+SERVICES="${GAGGIMATE_SERVICES:-barista-memory barista-memory-web}"
 
 cd "$HERE"
 if [ -n "$(git status --porcelain)" ]; then
@@ -24,9 +24,9 @@ if [ "$(git rev-parse HEAD)" != "$(git rev-parse '@{upstream}')" ]; then
 fi
 want="$(git rev-parse --short HEAD)"
 
-ssh -o BatchMode=yes "$SERVER_HOST" bash -s "$SERVER_DIR" "$SERVICE" "$want" <<'REMOTE'
+ssh -o BatchMode=yes "$SERVER_HOST" bash -s "$SERVER_DIR" "$SERVICES" "$want" <<'REMOTE'
 set -euo pipefail
-dir="$1"; service="$2"; want="$3"
+dir="$1"; services="$2"; want="$3"
 cd "$dir"
 if [ -n "$(git status --porcelain)" ]; then
   echo "Pi checkout has local changes — refusing to pull over them:" >&2
@@ -39,7 +39,13 @@ have="$(git rev-parse --short HEAD)"
 [ "$have" = "$want" ] || { echo "origin/main is $have, expected $want — push not visible yet?" >&2; exit 1; }
 npm ci --silent
 npm run build >/dev/null
-sudo systemctl restart "$service"
+for service in $services; do
+  systemctl cat "$service" >/dev/null 2>&1 || { echo "  ($service not installed here, skipped)"; continue; }
+  sudo systemctl restart "$service"
+done
 sleep 4
-systemctl is-active --quiet "$service" && echo "deployed $have, $service active" || { journalctl -u "$service" -n 20 --no-pager; exit 1; }
+for service in $services; do
+  systemctl cat "$service" >/dev/null 2>&1 || continue
+  systemctl is-active --quiet "$service" && echo "deployed $have, $service active" || { journalctl -u "$service" -n 20 --no-pager; exit 1; }
+done
 REMOTE
