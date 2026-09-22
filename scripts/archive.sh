@@ -9,8 +9,8 @@ set -euo pipefail
 # Addresses come from .env next to this repo (see .env.example), never from here.
 ENV_FILE="$(cd "$(dirname "$0")/.." && pwd)/.env"
 [ -f "$ENV_FILE" ] && { set -a; . "$ENV_FILE"; set +a; }
-PI_HOST="${GAGGIMATE_PI_HOST:?set GAGGIMATE_PI_HOST in .env}"
-PI_DIR="${GAGGIMATE_PI_DIR:?set GAGGIMATE_PI_DIR in .env}"
+SERVER_HOST="${GAGGIMATE_SERVER_HOST:?set GAGGIMATE_SERVER_HOST in .env}"
+SERVER_DIR="${GAGGIMATE_SERVER_DIR:?set GAGGIMATE_SERVER_DIR in .env}"
 DEVICE="${GAGGIMATE_HOST:?set GAGGIMATE_HOST in .env}"
 
 remote() {
@@ -20,8 +20,8 @@ remote() {
   for arg in "$@"; do
     quoted+=" $(printf '%q' "$arg")"
   done
-  ssh -o BatchMode=yes "$PI_HOST" \
-    "cd $PI_DIR && GAGGIMATE_HOST=$DEVICE GAGGIMATE_DB=$PI_DIR/data/archive.db node --no-warnings dist/cli.js$quoted"
+  ssh -o BatchMode=yes "$SERVER_HOST" \
+    "cd $SERVER_DIR && GAGGIMATE_HOST=$DEVICE GAGGIMATE_DB=$SERVER_DIR/data/archive.db node --no-warnings dist/cli.js$quoted"
 }
 
 case "${1:-}" in

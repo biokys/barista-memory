@@ -11,8 +11,8 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")/.." && pwd)"
 [ -f "$HERE/.env" ] && { set -a; . "$HERE/.env"; set +a; }
-PI_HOST="${GAGGIMATE_PI_HOST:?set GAGGIMATE_PI_HOST in .env}"
-PI_DIR="${GAGGIMATE_PI_DIR:?set GAGGIMATE_PI_DIR in .env}"
+SERVER_HOST="${GAGGIMATE_SERVER_HOST:?set GAGGIMATE_SERVER_HOST in .env}"
+SERVER_DIR="${GAGGIMATE_SERVER_DIR:?set GAGGIMATE_SERVER_DIR in .env}"
 SERVICE="${GAGGIMATE_SERVICE:-barista-memory}"
 
 cd "$HERE"
@@ -24,7 +24,7 @@ if [ "$(git rev-parse HEAD)" != "$(git rev-parse '@{upstream}')" ]; then
 fi
 want="$(git rev-parse --short HEAD)"
 
-ssh -o BatchMode=yes "$PI_HOST" bash -s "$PI_DIR" "$SERVICE" "$want" <<'REMOTE'
+ssh -o BatchMode=yes "$SERVER_HOST" bash -s "$SERVER_DIR" "$SERVICE" "$want" <<'REMOTE'
 set -euo pipefail
 dir="$1"; service="$2"; want="$3"
 cd "$dir"

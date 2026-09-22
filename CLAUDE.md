@@ -173,8 +173,8 @@ npm run cli -- calibrate                   # bloom temperature vs. settledness, 
 ./scripts/archive.sh show|stats|ingest|set-setup|fix-setup|recompute|recompute-context   # same, against the Pi
 ```
 
-Deploy to the Pi: **commit, push, `npm run deploy`** (`scripts/deploy.sh`,
-host and path from `.env`). The Pi is a git checkout of `origin/main`; the
+Deploy to the server: **commit, push, `npm run deploy`** (`scripts/deploy.sh`,
+host and path from `.env`). The server is a git checkout of `origin/main`; the
 script refuses an unclean or unpushed tree here and refuses to pull over local
 edits there. Do not tar files over — that is how the old vendored copies drifted.
 

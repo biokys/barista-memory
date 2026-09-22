@@ -164,8 +164,9 @@ npm run daemon                            # keep going: poll, archive, sample st
 ```
 
 Run the daemon permanently with `deploy/barista-memory.service` (fill in the
-placeholders), and back the database up with `deploy/backup-db-pi.sh` — the
-archive is the only durable copy of your shots.
+placeholders) on any always-on Linux box — it was built on a Raspberry Pi, but
+nothing depends on that — and back the database up with `deploy/backup-db.sh`:
+the archive is the only durable copy of your shots.
 
 ### Using it from an AI assistant
 
@@ -194,7 +195,7 @@ brewing context (`get_current_setup`, `set_current_setup`, `move_setup`,
 
 ### Day to day, from a laptop
 
-`scripts/archive.sh` runs the CLI on the Pi over ssh (`show`, `status`,
+`scripts/archive.sh` runs the CLI on the server over ssh (`show`, `status`,
 `last`, `set-setup`, `calibrate`, …) and `scripts/deploy.sh` ships a pushed
 commit there and restarts the daemon. Both read `.env` — copy `.env.example`.
 

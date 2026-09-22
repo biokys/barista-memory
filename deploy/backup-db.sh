@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Runs ON the Pi: snapshot the archive database and ship it to the backup
-# host. The Pi holds the only live copy of every shot, so this must not depend
+# Runs ON the server: snapshot the archive database and ship it to the backup
+# host. The server holds the only live copy of every shot, so this must not depend
 # on any other machine being awake — hence it runs here, not on the laptop.
 #
 # The database is in WAL mode, so a plain copy can catch it mid-write;
