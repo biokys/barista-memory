@@ -74,7 +74,7 @@ export async function renderSettings(view) {
           <div class="card-head"><h2>${t("receipt.preview")}</h2>${lastId ? `<a class="btn sm ghost" href="api/shots/${lastId}/receipt.png" target="_blank" rel="noopener">PNG</a>` : ""}</div>
           ${lastId ? `<img id="rc-preview" class="receipt-preview" src="api/shots/${lastId}/receipt.png?ts=${Date.now()}" alt="">` : `<p class="empty">${t("now.none")}</p>`}
         </section>
-      </div>` : ""};
+      </div>` : ""}`;
     view.querySelector("#scale-scan")?.addEventListener("click", async () => {
       try { await api.scanScales(); toast(t("scale.scanning")); setTimeout(load, 6000); } catch (err) { toast(String(err.message), "bad"); }
     });
