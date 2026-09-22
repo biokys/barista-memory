@@ -154,6 +154,16 @@ user switched it off). Interactive callers go through `liveStatus.ts`: a
 routes refuse at once (`requireMachine`) while it is known off. The daemon
 keeps its 10 s — it is not interactive and a slow answer is still an answer.
 
+**Receipts are rendered here, printed by a dumb client.** `receipt.ts` draws
+the receipt as SVG and rasterises it with resvg-wasm (fonts in
+`assets/fonts`, OFL); `printer/` talks MXW01 over BlueZ D-Bus with
+`dbus-next` — no Python, no native module, so the container and the add-on
+print by themselves (`host_dbus: true`, or `/run/dbus` mounted). The old
+`~/c19-printer` pipeline on the Pi was disabled on 2026-09-22 once the Node
+path printed shot 415 (`systemctl disable --now c19-autoprint`); it is kept
+only as a reference driver. The printer sleeps: "not seen by Bluetooth"
+means switch it on, not a bug. Only one print at a time per process.
+
 **Notes sync compares a fingerprint before touching the machine.** `notes_sync`
 stores the archive-side inputs each push was built from; a pass where they are
 unchanged opens no WebSocket. Before that, every pass cost one connection per
