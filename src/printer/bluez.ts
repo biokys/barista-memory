@@ -146,16 +146,17 @@ function describe(dev: Record<string, Variant> | null): string {
 }
 
 /**
- * What BlueZ build we are talking to, for the log. ExperimentalFeatures is
- * only present when bluetoothd runs with -E (Home Assistant OS does, the Pi
- * does not), which is the one known difference between the host where the
- * printer connects and the one where Connect() never answers.
+ * What BlueZ build we are talking to, for the log. The per-bearer interfaces
+ * exist only when bluetoothd runs with -E (Home Assistant OS does, the Pi
+ * does not); Adapter1.ExperimentalFeatures is a different thing, the
+ * kernel-side experimental features, and was read as "-E is off" once.
  */
-async function describeStack(adapter: string): Promise<string> {
+async function describeStack(adapter: string, device: ProxyObject): Promise<string> {
   try {
     const objects = await managedObjects();
-    const experimental = objects[adapter]?.["org.bluez.Adapter1"]?.ExperimentalFeatures?.value as string[] | undefined;
-    return ` [experimental=${experimental ? experimental.length : "no"}]`;
+    const kernel = objects[adapter]?.["org.bluez.Adapter1"]?.ExperimentalFeatures?.value as string[] | undefined;
+    const bearer = Object.keys(device.interfaces).includes("org.bluez.Bearer.LE1");
+    return ` [bluetoothd-experimental=${bearer ? "yes" : "no"} kernel-experimental=${kernel ? kernel.length : "no"}]`;
   } catch {
     return "";
   }
@@ -202,7 +203,7 @@ export async function connect(address: string, attempts = CONNECT_ATTEMPTS): Pro
         // What the scan saw, for the log: address type and signal are what
         // usually explain an LE connection that never completes.
         const events = timeline.length ? ` events: ${timeline.join(", ")}` : " events: none";
-        throw new Error(`${error instanceof Error ? error.message : error}${describe(seen)}${await describeStack(adapter)}${events}`);
+        throw new Error(`${error instanceof Error ? error.message : error}${describe(seen)}${await describeStack(adapter, obj)}${events}`);
       } finally {
         props.removeListener("PropertiesChanged", onChange);
       }
