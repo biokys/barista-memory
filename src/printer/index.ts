@@ -57,8 +57,8 @@ export type PrintResult =
 
 let busy = false;
 
-async function withPrinter<T>(mac: string, fn: (printer: Mxw01) => Promise<T>): Promise<T> {
-  const link = await connect(mac);
+async function withPrinter<T>(mac: string, fn: (printer: Mxw01) => Promise<T>, attempts?: number): Promise<T> {
+  const link = await connect(mac, attempts);
   try {
     const [control, data, notify] = await Promise.all([link.characteristic(CONTROL_UUID), link.characteristic(DATA_UUID), link.characteristic(NOTIFY_UUID)]);
     let handler: ((d: Uint8Array) => void) | null = null;
@@ -111,7 +111,9 @@ export async function printerStatus(db: DatabaseSync): Promise<{ ok: true; statu
   if (busy) return { ok: false, code: "BUSY", message: "A print is running" };
   busy = true;
   try {
-    return { ok: true, status: await withPrinter(settings.mac, (p) => p.status()) };
+    // One attempt: this answers a button in the UI, which must come back
+    // within the ingress proxy's patience; printing itself keeps retrying.
+    return { ok: true, status: await withPrinter(settings.mac, (p) => p.status(), 1) };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error(`printer: ${settings.mac}: ${message}`);

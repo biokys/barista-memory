@@ -123,11 +123,11 @@ async function waitForAdvertising(adapter: string, path: string, ms: number): Pr
   }
 }
 
-export async function connect(address: string): Promise<Connection> {
+export async function connect(address: string, attempts = CONNECT_ATTEMPTS): Promise<Connection> {
   const adapter = await adapterPath();
   const path = devicePath(adapter, address);
   let lastError: unknown = null;
-  for (let attempt = 1; attempt <= CONNECT_ATTEMPTS; attempt++) {
+  for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       if (!(await waitForAdvertising(adapter, path, attempt === 1 ? 8000 : 4000))) {
         throw new Error("not advertising: the printer is asleep or off — switch it on and try again");
