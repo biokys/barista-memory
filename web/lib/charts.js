@@ -204,7 +204,9 @@ export function machineChart(container, samples, shots, sessions, events = [], m
     width: container.clientWidth, height: 280,
     cursor: { drag: { x: true, y: false } },
     legend: { show: false },
-    scales: { x: { time: true }, y: { range: [15, 105] }, pct: { range: [0, 100] } },
+    // Down to 5 °C: the cold level the machine reports is room minus its
+    // temperature offset, 14 °C here, and the model rests there overnight.
+    scales: { x: { time: true }, y: { range: [5, 105] }, pct: { range: [0, 100] } },
     axes: [
       axis({ scale: "x" }),
       axis({ scale: "y", values: (u, v) => v.map((n) => n + "°") }),
