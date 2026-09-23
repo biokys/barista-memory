@@ -20,6 +20,8 @@ import { changeMode, SWITCHABLE_MODES } from "../machineControl.js";
 import { handleMcpRequest, mcpEnabled } from "../mcp/http.js";
 import { recordSetup, updateSetup } from "../setups.js";
 import { listCoffees, coffeeSummary, createCoffee, updateCoffee } from "../coffees.js";
+import { agingPoints, bags, currentStock, stockWarnG } from "../coffeeStats.js";
+import { setSetting } from "../settings.js";
 import { loadArchivedShot, pressureSparkline } from "../shots.js";
 import { saveProfileMerged, selectProfileOnMachine } from "../profiles.js";
 import { statsSummary } from "../stats.js";
@@ -139,6 +141,7 @@ route("GET", "/api/now", async (_req, res) => {
   json(res, 200, {
     machine: conditions,
     setup,
+    stock: currentStock(db),
     maintenance: maintenanceStatus(db).filter((m) => m.enabled),
     last_shot: last ? { ...last, sparkline: pressureSparkline(db, last.id) } : null,
     server_time: Math.floor(Date.now() / 1000),
@@ -316,7 +319,23 @@ route("GET", "/api/coffees/:id", async (_req, res, p) => {
     coffee,
     shots: shots.map((s) => ({ ...s, sparkline: pressureSparkline(db, s.id) })),
     setups: db.prepare("SELECT * FROM setups WHERE coffee_id = ? ORDER BY valid_from DESC, id DESC").all(coffee.id),
+    aging: agingPoints(db, coffee.id),
+    bags: bags(db, coffee),
   });
+});
+
+route("GET", "/api/stock", async (_req, res) => {
+  json(res, 200, { stock: currentStock(db), warn_g: stockWarnG(db) });
+});
+
+route("PATCH", "/api/stock", async (req, res) => {
+  const body = await readJson(req);
+  if (body.warn_g !== undefined) {
+    const n = Number(body.warn_g);
+    if (!Number.isFinite(n) || n < 0) return json(res, 400, { error: "INVALID", message: "warn_g must be a number ≥ 0" });
+    setSetting(db, "stock_warn_g", String(n));
+  }
+  json(res, 200, { stock: currentStock(db), warn_g: stockWarnG(db) });
 });
 
 route("POST", "/api/coffees", async (req, res) => {

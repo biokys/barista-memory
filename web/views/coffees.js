@@ -2,6 +2,7 @@ import { t } from "../lib/i18n.js";
 import { api } from "../lib/api.js";
 import { fmt, toast } from "../lib/fmt.js";
 import { shotRow } from "./history.js";
+import { scatterChart } from "../lib/charts.js";
 
 /**
  * Coffees as identities: the list, and one coffee with its details, targets,
@@ -98,7 +99,16 @@ async function renderDetail(view, id) {
     view.innerHTML = `<div class="card" style="text-align:center;padding:48px 24px"><h1>${t("coffees.missing")}</h1><p style="margin-top:20px"><a class="btn" href="#/coffees">${t("coffees.title")}</a></p></div>`;
     return;
   }
-  const { coffee: c, shots, setups } = data;
+  const { coffee: c, shots, setups, aging, bags } = data;
+  const bagRow = (b) => `<tr class="${b.current ? "current" : ""}">
+    <td>${b.roast_date ?? "–"}${b.current ? ` <span class="pill accent">${t("coffees.in_use")}</span>` : ""}</td>
+    <td class="r num">${fmt.date(b.opened_at)}</td>
+    <td class="r num">${b.shots}</td>
+    <td class="r num">${b.used_g ?? "–"} g</td>
+    <td class="r num">${b.remaining_g != null ? b.remaining_g + " g" : "–"}</td>
+    <td class="r num">${b.g_per_day != null ? b.g_per_day + " g" : "–"}</td>
+    <td class="r num">${b.days_left != null ? t("coffees.days", { n: b.days_left }) : "–"}</td>
+  </tr>`;
   const targets = c.target_time_min_s || c.target_time_max_s || c.target_ratio
     ? `${c.target_time_min_s ?? "?"}–${c.target_time_max_s ?? "?"} s${c.target_ratio ? ` · 1:${c.target_ratio}` : ""}`
     : t("coffees.no_targets");
@@ -122,6 +132,14 @@ async function renderDetail(view, id) {
       <div class="card stat"><span class="v num">${c.bags}</span><span class="l">${t("coffees.bags")}</span></div>
       <div class="card stat"><span class="v num" style="font-size:1rem">${targets}</span><span class="l">${t("coffees.targets")}</span></div>
     </div>
+    <section class="card">
+      <div class="card-head"><h2>${t("coffees.aging")}</h2><span class="faint small">${t("coffees.aging_hint")}</span></div>
+      ${aging.length >= 3 ? `<div class="grid cols-2"><div class="chart chart-stat" id="age-time"></div><div class="chart chart-stat" id="age-ratio"></div></div>` : `<p class="empty">${t("coffees.aging_empty")}</p>`}
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>${t("coffees.bags")}</h2>${c.bag_g ? "" : `<span class="faint small">${t("coffees.bags_hint")}</span>`}</div>
+      ${bags.length ? `<table><thead><tr><th>${t("setup.roast_date")}</th><th class="r">${t("coffees.opened")}</th><th class="r">${t("coffees.shots")}</th><th class="r">${t("coffees.used")}</th><th class="r">${t("coffees.remaining")}</th><th class="r">${t("coffees.per_day")}</th><th class="r">${t("coffees.days_left")}</th></tr></thead><tbody>${bags.map(bagRow).join("")}</tbody></table>` : `<p class="empty">${t("coffees.no_periods")}</p>`}
+    </section>
     <div class="cols">
       <div class="col">
         <section class="card">
@@ -144,6 +162,17 @@ async function renderDetail(view, id) {
         </section>
       </div>
     </div>`;
+  const cleanups = [];
+  if (aging.length >= 3) {
+    // Colour by grind, so a grind change does not read as the coffee aging.
+    const grinds = [...new Set(aging.map((p) => p.grind_setting ?? "?"))];
+    const groups = aging.map((p) => grinds.indexOf(p.grind_setting ?? "?"));
+    const labels = Object.fromEntries(grinds.map((g, i) => [i, `${t("now.grind")} ${g}`]));
+    const days = aging.map((p) => Math.round(p.days * 10) / 10);
+    cleanups.push(scatterChart(view.querySelector("#age-time"), days, aging.map((p) => p.seconds), groups, labels, { xLabel: t("coffees.days_since_roast"), yLabel: "s" }));
+    const withRatio = aging.filter((p) => p.ratio != null);
+    cleanups.push(scatterChart(view.querySelector("#age-ratio"), withRatio.map((p) => Math.round(p.days * 10) / 10), withRatio.map((p) => p.ratio), withRatio.map((p) => grinds.indexOf(p.grind_setting ?? "?")), labels, { xLabel: t("coffees.days_since_roast"), yLabel: "1:x" }));
+  }
   const f = view.querySelector("#cf");
   f.onsubmit = async (e) => {
     e.preventDefault();
@@ -159,6 +188,8 @@ async function renderDetail(view, id) {
     toast(t("coffees.now_in_use", { name: c.name }));
     renderDetail(view, id);
   };
+
+  return () => cleanups.forEach((fn) => fn && fn());
 }
 
 export async function renderCoffees(view, [id]) {

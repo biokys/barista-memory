@@ -332,5 +332,22 @@
   "coffees.recent": "Shoty",
   "coffees.missing": "Tahle káva v archivu není.",
   "setup.coffee": "Káva",
-  "setup.new_coffee": "+ nová káva…"
+  "setup.new_coffee": "+ nová káva…",
+  "coffees.aging": "Stárnutí",
+  "coffees.aging_hint": "Dny od pražení proti času extrakce a ratiu, barva podle mletí. Potřebuje datum pražení v období.",
+  "coffees.aging_empty": "Zatím málo shotů s datem pražení.",
+  "coffees.days_since_roast": "dní od pražení",
+  "coffees.bags_hint": "Zadej gramáž balení v Údajích, aby se počítalo, kolik zbývá.",
+  "coffees.opened": "otevřeno",
+  "coffees.used": "spotřeba",
+  "coffees.remaining": "zbývá",
+  "coffees.per_day": "za den",
+  "coffees.days_left": "vydrží",
+  "coffees.days": "{n} d",
+  "now.stock": "Zbývá asi {g} g, vydrží {days}.",
+  "now.stock_low": "Dochází",
+  "stock.title": "Zásoba kávy",
+  "stock.hint": "Zbývající množství se počítá z gramáže balení na kartě kávy a z dávek od otevření. Pod touto hranicí se v Home Assistantu zapne senzor „Coffee running low“.",
+  "stock.warn_g": "Upozornit pod",
+  "stock.saved": "Uloženo."
 }

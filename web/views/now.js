@@ -57,6 +57,7 @@ export async function renderNow(view) {
               <div class="stat"><span class="v num">${s.dose_g != null ? s.dose_g + " g" : "–"}</span><span class="l">${t("now.dose")}</span></div>
             </div>
             <p class="faint small" style="margin-top:14px">${t("setup.since")} ${fmt.dateTime(s.valid_from)}</p>
+            ${now.stock?.remaining_g != null ? `<p class="small ${now.stock.low ? "" : "muted"}" style="margin-top:6px">${now.stock.low ? `<span class="pill warn">${t("now.stock_low")}</span> ` : ""}${t("now.stock", { g: now.stock.remaining_g, days: now.stock.days_left != null ? t("coffees.days", { n: now.stock.days_left }) : "–" })}</p>` : ""}
           ` : `<p class="muted">${t("now.no_setup")}</p>`}
         </section>
       </div>

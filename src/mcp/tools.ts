@@ -16,6 +16,8 @@ import { groupSettings } from "../device/machineSettings.js";
 import { PHASE_ARRAY_SCHEMA } from "./profileSchema.js";
 import { recordSetup, moveSetup, updateSetup } from "../setups.js";
 import { listCoffees, coffeeSummary, createCoffee, updateCoffee } from "../coffees.js";
+import { agingPoints, bags, currentStock } from "../coffeeStats.js";
+import { getCoffee } from "../coffees.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "../ingest.js";
 import { powerSessions, currentConditions, MODE_NAMES } from "../machineState.js";
 
@@ -113,7 +115,9 @@ const TOOLS: Tool[] = [
   },
   {
     name: "get_coffee",
-    description: "One coffee with its summary, its setup periods and its shots (newest first).",
+    description:
+      "One coffee with its summary, its setup periods, its shots (newest first), its bags (per roast date: doses " +
+      "used, grams remaining, consumption per day, days left) and aging points (days since roast vs. time, ratio, rating).",
     inputSchema: { type: "object", properties: { coffee_id: { type: "number" } }, required: ["coffee_id"] },
   },
   {
@@ -406,7 +410,7 @@ const TOOLS: Tool[] = [
  * against the same database handle the caller owns.
  */
 export function createMcpServer(db: DatabaseSync): Server {
-const server = new Server({ name: "barista-memory", version: "0.4.0" }, { capabilities: { tools: {} } });
+const server = new Server({ name: "barista-memory", version: "0.4.1" }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 
@@ -417,7 +421,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     switch (name) {
       case "get_current_setup": {
         const setup = currentSetup(db);
-        return ok({ setup, source: config.deviceHost });
+        return ok({ setup, stock: currentStock(db), source: config.deviceHost });
       }
 
       case "set_current_setup": {
@@ -458,7 +462,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (!coffee) return fail(`No coffee with id ${args!.coffee_id}`, "COFFEE_NOT_FOUND");
         const setups = db.prepare("SELECT * FROM setups WHERE coffee_id = ? ORDER BY valid_from DESC, id DESC").all(coffee.id);
         const shots = db.prepare("SELECT * FROM shot_context WHERE coffee_id = ? ORDER BY started_at DESC LIMIT 100").all(coffee.id);
-        return ok({ coffee, setups, shots });
+        return ok({ coffee, setups, shots, bags: bags(db, getCoffee(db, coffee.id)!), aging: agingPoints(db, coffee.id) });
       }
 
       case "save_coffee": {

@@ -332,5 +332,22 @@
   "coffees.recent": "Shots",
   "coffees.missing": "No such coffee in the archive.",
   "setup.coffee": "Coffee",
-  "setup.new_coffee": "+ new coffee…"
+  "setup.new_coffee": "+ new coffee…",
+  "coffees.aging": "Aging",
+  "coffees.aging_hint": "Days since roast against extraction time and ratio, coloured by grind. Needs a roast date on the period.",
+  "coffees.aging_empty": "Not enough shots with a roast date yet.",
+  "coffees.days_since_roast": "days since roast",
+  "coffees.bags_hint": "Set the bag weight under Details to get the remaining amount.",
+  "coffees.opened": "opened",
+  "coffees.used": "used",
+  "coffees.remaining": "remaining",
+  "coffees.per_day": "per day",
+  "coffees.days_left": "lasts",
+  "coffees.days": "{n} d",
+  "now.stock": "About {g} g left, lasts {days}.",
+  "now.stock_low": "Running low",
+  "stock.title": "Coffee stock",
+  "stock.hint": "The remaining amount comes from the bag weight on the coffee and the doses pulled since it was opened. Below this threshold the Home Assistant sensor “Coffee running low” turns on.",
+  "stock.warn_g": "Warn below",
+  "stock.saved": "Saved."
 }

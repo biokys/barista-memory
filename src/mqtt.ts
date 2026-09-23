@@ -6,6 +6,7 @@ import { currentConditions } from "./machineState.js";
 import { maintenanceStatus } from "./maintenance.js";
 import { changeMode, SWITCHABLE_MODES } from "./machineControl.js";
 import { printShot, printerSettings } from "./printer/index.js";
+import { currentStock } from "./coffeeStats.js";
 import type { ShotContextRow } from "./db/db.js";
 
 /**
@@ -130,6 +131,19 @@ export function startMqtt(db: DatabaseSync, version: string, log: (line: string)
       value_template: "{{ 'ON' if value_json.maintenance.due else 'OFF' }}",
       json_attributes_topic: stateTopic, json_attributes_template: "{{ value_json.maintenance | tojson }}", ...alwaysAvailability,
     }),
+    entity("sensor", "coffee_remaining", {
+      name: "Coffee remaining", icon: "mdi:sack", unit_of_measurement: "g", state_class: "measurement",
+      value_template: "{{ value_json.coffee.remaining_g if value_json.coffee and value_json.coffee.remaining_g is not none else 'unknown' }}",
+      json_attributes_topic: stateTopic, json_attributes_template: "{{ (value_json.coffee or {}) | tojson }}", ...alwaysAvailability,
+    }),
+    entity("sensor", "coffee_days_left", {
+      name: "Coffee days left", icon: "mdi:calendar-clock", unit_of_measurement: "d",
+      value_template: "{{ value_json.coffee.days_left if value_json.coffee and value_json.coffee.days_left is not none else 'unknown' }}", ...alwaysAvailability,
+    }),
+    entity("binary_sensor", "coffee_low", {
+      name: "Coffee running low", icon: "mdi:sack-percent",
+      value_template: "{{ 'ON' if value_json.coffee and value_json.coffee.low else 'OFF' }}", ...alwaysAvailability,
+    }),
     entity("sensor", "shots_since_backflush", {
       name: "Shots since backflush", icon: "mdi:counter", state_class: "total",
       value_template: "{{ value_json.maintenance.backflush_shots if value_json.maintenance.backflush_shots is not none else 'unknown' }}", ...alwaysAvailability,
@@ -196,6 +210,9 @@ export function startMqtt(db: DatabaseSync, version: string, log: (line: string)
           }
         : null,
       printer: { configured: printerSettings(dbNow).mac !== "", print_each_shot: printerSettings(dbNow).print_each_shot },
+      // The bag being ground from: remaining grams and days, from bag_g on
+      // the coffee minus the doses pulled since its roast-date period opened.
+      coffee: currentStock(dbNow),
       maintenance: {
         due: maint.some((m) => m.state === "due"),
         soon: maint.some((m) => m.state === "soon"),
