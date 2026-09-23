@@ -94,15 +94,40 @@ function devicePath(adapter: string, address: string): string {
  * Connect to a device by address. BlueZ often fails the first attempt and
  * only knows a device it has seen, so a miss triggers a short scan first.
  */
+/**
+ * Wait until the device is advertising right now. BlueZ keeps a device
+ * object from any earlier scan, and Connect() on a stale one just times out
+ * after twenty seconds; a cat printer that went to sleep is exactly that.
+ * RSSI is only present on a device while its advertisements arrive.
+ */
+async function waitForAdvertising(adapter: string, path: string, ms: number): Promise<boolean> {
+  const obj = await systemBus().getProxyObject(BLUEZ, adapter);
+  const a = obj.getInterface("org.bluez.Adapter1");
+  try { await a.SetDiscoveryFilter({ Transport: new Variant("s", "le") }); } catch { /* older BlueZ */ }
+  try { await a.StartDiscovery(); } catch (error) { if (!String(error).includes("InProgress")) throw error; }
+  const deadline = Date.now() + ms;
+  try {
+    while (Date.now() < deadline) {
+      const objects = await managedObjects();
+      const dev = objects[path]?.["org.bluez.Device1"];
+      if (dev && (dev.RSSI != null || dev.Connected?.value)) return true;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    return false;
+  } finally {
+    try { await a.StopDiscovery(); } catch { /* fine */ }
+  }
+}
+
 export async function connect(address: string): Promise<Connection> {
   const adapter = await adapterPath();
   const path = devicePath(adapter, address);
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= CONNECT_ATTEMPTS; attempt++) {
     try {
-      let objects = await managedObjects();
-      if (!objects[path]) { await scan(10); objects = await managedObjects(); }
-      if (!objects[path]) throw new Error("not seen by Bluetooth: is the printer switched on and in range, and not held by a phone app?");
+      if (!(await waitForAdvertising(adapter, path, attempt === 1 ? 8000 : 4000))) {
+        throw new Error("not advertising: the printer is asleep or off — switch it on and try again");
+      }
       const obj = await systemBus().getProxyObject(BLUEZ, path);
       const device = obj.getInterface("org.bluez.Device1");
       const props = obj.getInterface("org.freedesktop.DBus.Properties");
