@@ -21,6 +21,7 @@ import { handleMcpRequest, mcpEnabled } from "../mcp/http.js";
 import { recordSetup, updateSetup } from "../setups.js";
 import { listCoffees, coffeeSummary, createCoffee, updateCoffee } from "../coffees.js";
 import { agingPoints, bags, currentStock, stockWarnG } from "../coffeeStats.js";
+import { suggestFor, verdictFor } from "../dialin.js";
 import { setSetting } from "../settings.js";
 import { loadArchivedShot, pressureSparkline } from "../shots.js";
 import { saveProfileMerged, selectProfileOnMachine } from "../profiles.js";
@@ -142,6 +143,12 @@ route("GET", "/api/now", async (_req, res) => {
     machine: conditions,
     setup,
     stock: currentStock(db),
+    // Dial-in: where to start the current coffee (from its own history, the
+    // roaster's, or everything), and what the last shot says about the next.
+    dialin: {
+      suggestion: setup?.coffee_id != null ? suggestFor(db, setup.coffee_id) : null,
+      verdict: last ? verdictFor(db, last) : null,
+    },
     maintenance: maintenanceStatus(db).filter((m) => m.enabled),
     last_shot: last ? { ...last, sparkline: pressureSparkline(db, last.id) } : null,
     server_time: Math.floor(Date.now() / 1000),
@@ -250,7 +257,7 @@ route("GET", "/api/shots/:id", async (_req, res, p) => {
   // instead of leading to a "not found" page.
   const prev = db.prepare("SELECT id FROM shot_context WHERE started_at < (SELECT started_at FROM shots WHERE id = ?) ORDER BY started_at DESC LIMIT 1").get(Number(p.id)) as any;
   const next = db.prepare("SELECT id FROM shot_context WHERE started_at > (SELECT started_at FROM shots WHERE id = ?) ORDER BY started_at ASC LIMIT 1").get(Number(p.id)) as any;
-  json(res, 200, { ...loaded, era: eraOf(db, loaded.context.started_at), prev_id: prev?.id ?? null, next_id: next?.id ?? null });
+  json(res, 200, { ...loaded, era: eraOf(db, loaded.context.started_at), verdict: verdictFor(db, loaded.context), prev_id: prev?.id ?? null, next_id: next?.id ?? null });
 });
 
 route("POST", "/api/shots/:id/rating", async (req, res, p) => {
@@ -322,6 +329,11 @@ route("GET", "/api/coffees/:id", async (_req, res, p) => {
     aging: agingPoints(db, coffee.id),
     bags: bags(db, coffee),
   });
+});
+
+route("GET", "/api/coffees/:id/suggestion", async (_req, res, p) => {
+  if (!db.prepare("SELECT 1 FROM coffees WHERE id = ?").get(Number(p.id))) return json(res, 404, { error: "COFFEE_NOT_FOUND" });
+  json(res, 200, { suggestion: suggestFor(db, Number(p.id)) });
 });
 
 route("GET", "/api/stock", async (_req, res) => {

@@ -21,6 +21,7 @@ export const api = {
   coffee: (id) => call("GET", `api/coffees/${id}`),
   createCoffee: (input) => call("POST", "api/coffees", input),
   updateCoffee: (id, change) => call("PATCH", `api/coffees/${id}`, change),
+  suggestion: (coffeeId) => call("GET", `api/coffees/${coffeeId}/suggestion`),
   stock: () => call("GET", "api/stock"),
   updateStock: (change) => call("PATCH", "api/stock", change),
   setups: () => call("GET", "api/setups"),

@@ -1,6 +1,6 @@
 import { t } from "../lib/i18n.js";
 import { api } from "../lib/api.js";
-import { fmt, sparkline, toast } from "../lib/fmt.js";
+import { fmt, sparkline, toast, verdictText, verdictTone } from "../lib/fmt.js";
 import { usage, tone } from "../lib/maintenance.js";
 
 function stateLabel(m) {
@@ -19,6 +19,27 @@ function readiness(p, reachable) {
   if (p >= 85) return { text: t("machine.ready"), tone: "ok" };
   if (p >= 60) return { text: t("machine.partly"), tone: "warn" };
   return { text: t("machine.cold"), tone: "bad" };
+}
+
+/**
+ * The dial-in lines: the verdict on the last shot when the coffee has
+ * targets, else a hint to set them; and, for a coffee with no shots of its
+ * own yet, where to start.
+ */
+function dialinBlock(d) {
+  if (!d) return "";
+  const parts = [];
+  const v = d.verdict;
+  if (v && v.code !== "no_data") {
+    const text = verdictText(v);
+    if (text) parts.push(`<div class="row" style="margin-top:12px"><span class="pill ${verdictTone(v)}">${t("dialin.next")}</span><span>${text}</span><span class="faint small num">${v.seconds != null ? v.seconds + " s" : ""}${v.targets?.time_min_s != null || v.targets?.time_max_s != null ? ` / ${v.targets.time_min_s ?? "?"}–${v.targets.time_max_s ?? "?"} s` : ""}</span></div>`);
+    else if (v.code === "no_targets" && v.coffee) parts.push(`<p class="faint small" style="margin-top:12px">${t("dialin.no_targets")}</p>`);
+  }
+  const s = d.suggestion;
+  if (s && s.source !== "none" && s.source !== "coffee") {
+    parts.push(`<p class="small muted" style="margin-top:8px">${t("dialin.start", { grind: s.grind_setting ?? "?", dose: s.dose_g ?? "?" })} <span class="faint">${t("dialin.source." + s.source, { coffee: s.from_coffee ?? "" })}</span></p>`);
+  }
+  return parts.join("");
 }
 
 /** The modes a person can switch to from here; grind is the grinder's business. */
@@ -59,6 +80,7 @@ export async function renderNow(view) {
             <p class="faint small" style="margin-top:14px">${t("setup.since")} ${fmt.dateTime(s.valid_from)}</p>
             ${now.stock?.remaining_g != null ? `<p class="small ${now.stock.low ? "" : "muted"}" style="margin-top:6px">${now.stock.low ? `<span class="pill warn">${t("now.stock_low")}</span> ` : ""}${t("now.stock", { g: now.stock.remaining_g, days: now.stock.days_left != null ? t("coffees.days", { n: now.stock.days_left }) : "–" })}</p>` : ""}
           ` : `<p class="muted">${t("now.no_setup")}</p>`}
+          ${dialinBlock(now.dialin)}
         </section>
       </div>
       ${(now.maintenance || []).length ? `

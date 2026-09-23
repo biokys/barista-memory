@@ -349,5 +349,18 @@
   "stock.title": "Zásoba kávy",
   "stock.hint": "Zbývající množství se počítá z gramáže balení na kartě kávy a z dávek od otevření. Pod touto hranicí se v Home Assistantu zapne senzor „Coffee running low“.",
   "stock.warn_g": "Upozornit pod",
-  "stock.saved": "Uloženo."
+  "stock.saved": "Uloženo.",
+  "dialin.next": "Příště",
+  "dialin.on_target": "tak akorát, nic neměň",
+  "dialin.too_fast_small": "o kousek jemněji",
+  "dialin.too_fast_large": "výrazně jemněji",
+  "dialin.too_slow_small": "o kousek hruběji",
+  "dialin.too_slow_large": "výrazně hruběji",
+  "dialin.ratio_low": "nech téct o něco déle",
+  "dialin.ratio_high": "zastav o něco dřív",
+  "dialin.no_targets": "Nastav cílový čas a ratio na kartě kávy a dostaneš po každém shotu radu.",
+  "dialin.start": "Začni na mletí {grind} a dávce {dose} g.",
+  "dialin.source.coffee": "(z historie této kávy)",
+  "dialin.source.roaster": "(podle {coffee} od stejné pražírny)",
+  "dialin.source.global": "(podle {coffee}, poslední mletí)"
 }

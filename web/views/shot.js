@@ -1,6 +1,6 @@
 import { t } from "../lib/i18n.js";
 import { api } from "../lib/api.js";
-import { fmt, toast } from "../lib/fmt.js";
+import { fmt, toast, verdictText, verdictTone } from "../lib/fmt.js";
 import { shotChart } from "../lib/charts.js";
 
 function declineEnd(shot) {
@@ -67,6 +67,7 @@ export async function renderShot(view, [id]) {
           <dt>${t("shot.peak")}</dt><dd class="num">${fmt.bar(peak)}${dec != null ? ` <span class="muted">· ${t("shot.decline")} ${dec.toFixed(1)}</span>` : ""}</dd>
           <dt>${t("shot.era")}</dt><dd>${data.era ? `<span class="pill accent">${t("events.kind." + data.era.kind)}</span> ${t("shot.era_since", { title: data.era.title, n: data.era.shots_since })}` : `<span class="faint">${t("shot.era_none")}</span>`}</dd>
           <dt>${t("shot.machine")}</dt><dd>${m ? `<span class="num">${t("machine.heating_for")} ${fmt.duration(m.heating_for_s)}</span> <span class="pill ${readiness}">${fmt.pct(m.settledness)}</span>` : `<span class="faint">${t("machine.unknown")}</span>`}</dd>
+          <dt>${t("dialin.next")}</dt><dd>${verdictText(data.verdict) ? `<span class="pill ${verdictTone(data.verdict)}">${verdictText(data.verdict)}</span>` : `<span class="faint">${data.verdict?.coffee ? t("dialin.no_targets") : t("shot.era_none")}</span>`}</dd>
         </dl>
       </section>
       <section class="card">

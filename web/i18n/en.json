@@ -349,5 +349,18 @@
   "stock.title": "Coffee stock",
   "stock.hint": "The remaining amount comes from the bag weight on the coffee and the doses pulled since it was opened. Below this threshold the Home Assistant sensor “Coffee running low” turns on.",
   "stock.warn_g": "Warn below",
-  "stock.saved": "Saved."
+  "stock.saved": "Saved.",
+  "dialin.next": "Next time",
+  "dialin.on_target": "spot on, change nothing",
+  "dialin.too_fast_small": "a touch finer",
+  "dialin.too_fast_large": "much finer",
+  "dialin.too_slow_small": "a touch coarser",
+  "dialin.too_slow_large": "much coarser",
+  "dialin.ratio_low": "let it run a little longer",
+  "dialin.ratio_high": "stop a little earlier",
+  "dialin.no_targets": "Set a target time and ratio on the coffee page to get advice after each shot.",
+  "dialin.start": "Start at grind {grind} and a {dose} g dose.",
+  "dialin.source.coffee": "(from this coffee's history)",
+  "dialin.source.roaster": "(after {coffee} from the same roaster)",
+  "dialin.source.global": "(after {coffee}, the latest grind)"
 }

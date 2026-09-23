@@ -100,6 +100,8 @@ async function renderDetail(view, id) {
     return;
   }
   const { coffee: c, shots, setups, aging, bags } = data;
+  const { suggestion: sug } = await api.suggestion(id);
+  const suggestionLine = sug.source === "none" ? "" : `<p class="small muted" style="margin:-4px 0 14px">${t("dialin.start", { grind: sug.grind_setting ?? "?", dose: sug.dose_g ?? "?" })} <span class="faint">${t("dialin.source." + sug.source, { coffee: sug.from_coffee ?? "" })}${sug.seconds != null ? ` · ${sug.seconds} s · ${fmt.ratio(sug.ratio)}${sug.rating != null ? " · ★ " + sug.rating : ""}` : ""}</span></p>`;
   const bagRow = (b) => `<tr class="${b.current ? "current" : ""}">
     <td>${b.roast_date ?? "–"}${b.current ? ` <span class="pill accent">${t("coffees.in_use")}</span>` : ""}</td>
     <td class="r num">${fmt.date(b.opened_at)}</td>
@@ -132,6 +134,7 @@ async function renderDetail(view, id) {
       <div class="card stat"><span class="v num">${c.bags}</span><span class="l">${t("coffees.bags")}</span></div>
       <div class="card stat"><span class="v num" style="font-size:1rem">${targets}</span><span class="l">${t("coffees.targets")}</span></div>
     </div>
+    ${suggestionLine}
     <section class="card">
       <div class="card-head"><h2>${t("coffees.aging")}</h2><span class="faint small">${t("coffees.aging_hint")}</span></div>
       ${aging.length >= 3 ? `<div class="grid cols-2"><div class="chart chart-stat" id="age-time"></div><div class="chart chart-stat" id="age-ratio"></div></div>` : `<p class="empty">${t("coffees.aging_empty")}</p>`}

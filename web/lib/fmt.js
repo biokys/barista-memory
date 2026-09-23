@@ -48,3 +48,16 @@ export function el(html) {
   tpl.innerHTML = html.trim();
   return tpl.content.firstElementChild;
 }
+
+/** The dial-in verdict as one sentence, from fixed phrases. Empty for no targets/data. */
+export function verdictText(v) {
+  if (!v || v.code === "no_targets" || v.code === "no_data") return "";
+  const key = v.code === "too_fast" || v.code === "too_slow" ? `${v.code}_${v.step ?? "small"}` : v.code;
+  return t("dialin." + key);
+}
+export function verdictTone(v) {
+  if (!v) return "";
+  if (v.code === "on_target") return "ok";
+  if (v.code === "no_targets" || v.code === "no_data") return "";
+  return "warn";
+}

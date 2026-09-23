@@ -17,6 +17,7 @@ import { PHASE_ARRAY_SCHEMA } from "./profileSchema.js";
 import { recordSetup, moveSetup, updateSetup } from "../setups.js";
 import { listCoffees, coffeeSummary, createCoffee, updateCoffee } from "../coffees.js";
 import { agingPoints, bags, currentStock } from "../coffeeStats.js";
+import { suggestFor, verdictFor } from "../dialin.js";
 import { getCoffee } from "../coffees.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "../ingest.js";
 import { powerSessions, currentConditions, MODE_NAMES } from "../machineState.js";
@@ -142,6 +143,16 @@ const TOOLS: Tool[] = [
         archived: { type: "boolean", description: "Hide from pickers; history keeps it" },
       },
     },
+  },
+  {
+    name: "dial_in",
+    description:
+      "Where to start a coffee and what the last shot says. suggestion: the grind and dose to begin with, from " +
+      "this coffee's own best-rated (else most recent) shots, else the same roaster's, else the last 90 days. " +
+      "verdict: the latest shot of the coffee judged against the coffee's targets (time window first, then " +
+      "ratio ±10 %): on_target | too_fast (grind finer) | too_slow (coarser) | ratio_low | ratio_high | " +
+      "no_targets (set them with save_coffee) | no_data. Defaults to the coffee in use.",
+    inputSchema: { type: "object", properties: { coffee_id: { type: "number", description: "Default: the current coffee" } } },
   },
   {
     name: "record_event",
@@ -410,7 +421,7 @@ const TOOLS: Tool[] = [
  * against the same database handle the caller owns.
  */
 export function createMcpServer(db: DatabaseSync): Server {
-const server = new Server({ name: "barista-memory", version: "0.4.1" }, { capabilities: { tools: {} } });
+const server = new Server({ name: "barista-memory", version: "0.4.2" }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 
@@ -450,6 +461,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const setup = updateSetup(db, setup_id as number, change);
         if (!setup) return fail(`No setup with id ${setup_id}`, "SETUP_NOT_FOUND");
         return ok({ setup, message: "Setup corrected; shots in that period re-derive their context" });
+      }
+
+      case "dial_in": {
+        const coffeeId = (args?.coffee_id as number | undefined) ?? currentSetup(db)?.coffee_id ?? null;
+        if (coffeeId == null) return fail("No coffee in use and none given", "NO_COFFEE");
+        const coffee = getCoffee(db, coffeeId);
+        if (!coffee) return fail(`No coffee with id ${coffeeId}`, "COFFEE_NOT_FOUND");
+        const last = db.prepare("SELECT * FROM shot_context WHERE coffee_id = ? ORDER BY started_at DESC LIMIT 1").get(coffeeId) as unknown as ShotContextRow | undefined;
+        return ok({ coffee: { id: coffee.id, name: coffee.name, roaster: coffee.roaster }, suggestion: suggestFor(db, coffeeId), verdict: last ? verdictFor(db, last) : null });
       }
 
       case "list_coffees": {
@@ -538,7 +558,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "get_archived_shot": {
         const loaded = loadArchivedShot(db, args!.shot_id as number, (args?.include_full_curve as boolean) ?? false);
         if (!loaded) return fail(`Shot ${args!.shot_id} is not in the archive`, "SHOT_NOT_FOUND");
-        return ok({ ...loaded, era: eraOf(db, loaded.context.started_at) });
+        return ok({ ...loaded, era: eraOf(db, loaded.context.started_at), verdict: verdictFor(db, loaded.context) });
       }
 
       case "list_profiles": {

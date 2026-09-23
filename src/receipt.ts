@@ -8,6 +8,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { config } from "./config.js";
 import { loadArchivedShot } from "./shots.js";
 import { maintenanceStatus } from "./maintenance.js";
+import { verdictFor } from "./dialin.js";
 import { getSetting } from "./settings.js";
 
 /**
@@ -73,8 +74,10 @@ const GREETINGS: Record<"cs" | "en", string[]> = {
 };
 
 const T: Record<"cs" | "en", Record<string, string>> = {
-  cs: { title: "ESPRESSO", grind: "Mletí", dose: "Dávka", cup: "V šálku", ratio: "poměr", time: "Čas", preinf: "preinfuze", temp: "Teplota", target: "cíl", peak: "Špička", decline: "pokles", machine: "Stroj", warm: "nahřátí", pressure: "tlak (bar)", flow: "průtok (ml/s)", thanks: "Děkujeme za návštěvu!", due: "Údržba po termínu:", backflush: "proplach", cafiza: "Cafiza", descale: "odvápnění", water_filter: "filtr vody", gasket: "těsnění", test: "Zkušební tisk", unrated: "" },
-  en: { title: "ESPRESSO", grind: "Grind", dose: "Dose", cup: "In the cup", ratio: "ratio", time: "Time", preinf: "preinfusion", temp: "Temperature", target: "target", peak: "Peak", decline: "decline", machine: "Machine", warm: "warm-up", pressure: "pressure (bar)", flow: "flow (ml/s)", thanks: "Thank you for visiting!", due: "Maintenance overdue:", backflush: "backflush", cafiza: "Cafiza", descale: "descaling", water_filter: "water filter", gasket: "gasket", test: "Test print", unrated: "" },
+  cs: { title: "ESPRESSO", grind: "Mletí", dose: "Dávka", cup: "V šálku", ratio: "poměr", time: "Čas", preinf: "preinfuze", temp: "Teplota", target: "cíl", peak: "Špička", decline: "pokles", machine: "Stroj", warm: "nahřátí", pressure: "tlak (bar)", flow: "průtok (ml/s)", thanks: "Děkujeme za návštěvu!", due: "Údržba po termínu:", backflush: "proplach", cafiza: "Cafiza", descale: "odvápnění", water_filter: "filtr vody", gasket: "těsnění", test: "Zkušební tisk", unrated: "",
+    next: "Příště", on_target: "tak akorát, nic neměň", too_fast_small: "o kousek jemněji", too_fast_large: "výrazně jemněji", too_slow_small: "o kousek hruběji", too_slow_large: "výrazně hruběji", ratio_low: "nech téct o něco déle", ratio_high: "zastav o něco dřív" },
+  en: { title: "ESPRESSO", grind: "Grind", dose: "Dose", cup: "In the cup", ratio: "ratio", time: "Time", preinf: "preinfusion", temp: "Temperature", target: "target", peak: "Peak", decline: "decline", machine: "Machine", warm: "warm-up", pressure: "pressure (bar)", flow: "flow (ml/s)", thanks: "Thank you for visiting!", due: "Maintenance overdue:", backflush: "backflush", cafiza: "Cafiza", descale: "descaling", water_filter: "water filter", gasket: "gasket", test: "Test print", unrated: "",
+    next: "Next time", on_target: "spot on, change nothing", too_fast_small: "a touch finer", too_fast_large: "much finer", too_slow_small: "a touch coarser", too_slow_large: "much coarser", ratio_low: "let it run a little longer", ratio_high: "stop a little earlier" },
 };
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -289,6 +292,11 @@ export async function renderShotReceipt(db: DatabaseSync, shotId: number, lang: 
   if (o.show_chart && curve.length >= 2) { svg.rule(); chart(svg, curve, phases, t); }
 
   stars(svg, c.rating ?? null);
+
+  // One line of advice, from the coffee's targets; nothing when it has none.
+  const verdict = verdictFor(db, c);
+  const phrase = verdict.code === "too_fast" || verdict.code === "too_slow" ? t[`${verdict.code}_${verdict.step ?? "small"}`] : t[verdict.code];
+  if (phrase) { svg.rule(); svg.centered(`${t.next}: ${phrase}`, 16, 600); }
 
   const due = maintenanceStatus(db).filter((m) => m.enabled && m.state === "due");
   if (due.length) { svg.rule(); svg.centered(`${t.due} ${due.map((m) => t[m.key] ?? m.key).join(", ")}`, 15, 600); }
