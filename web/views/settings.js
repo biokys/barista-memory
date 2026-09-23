@@ -90,7 +90,7 @@ export async function renderSettings(view) {
             <span><b>${d.name || "?"}</b> <span class="faint small num">${d.address} · ${d.rssi ?? "–"} dBm</span>${d.printer_like ? ` <span class="pill accent">${t("printer.likely")}</span>` : ""}</span>
             <button class="btn sm" data-use="${d.address}">${t("printer.use")}</button>
           </div>`).join("")}</div>` : `<p class="faint small">${t("printer.none_found")}</p>`;
-        box.querySelectorAll("[data-use]").forEach((u) => (u.onclick = () => { view.querySelector("#printer-mac").value = u.dataset.use; }));
+        box.querySelectorAll("[data-use]").forEach((u) => (u.onclick = () => { view.querySelector("#printer-mac").value = u.dataset.use; box.innerHTML = ""; }));
       } catch (err) { toast(String(err.message), "bad"); }
       button.disabled = false; button.textContent = t("printer.scan");
     });

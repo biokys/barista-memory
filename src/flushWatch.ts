@@ -32,8 +32,9 @@ interface Run {
  * halves are merged into one state before anything is decided — evaluating
  * each message alone saw the profile in one and the process in the other and
  * never both, which is how the first watched backflush went unlogged.
- * While a utility profile is selected in brew mode one merged state line
- * per few seconds goes to the log, so the next surprise is diagnosable.
+ * Logs only run start and end; the per-second trace that found the split
+ * message shape is gone, it filled the journal whenever the utility profile
+ * stayed selected.
  */
 export function createFlushWatcher(db: DatabaseSync, log: (line: string) => void = console.log) {
   let known = new Set<string>();
@@ -41,7 +42,6 @@ export function createFlushWatcher(db: DatabaseSync, log: (line: string) => void
   let fetchedAt = 0;
   let refreshing = false;
   let run: Run | null = null;
-  let lastTrace = 0;
   let state: StatusEvent = {};
 
   const refreshProfiles = () => {
@@ -81,17 +81,14 @@ export function createFlushWatcher(db: DatabaseSync, log: (line: string) => void
       if (stale || unknown) refreshProfiles();
       const isUtility = !!ev.puid && utility.has(ev.puid);
 
-      if ((isUtility || ev.process?.u === 1) && ev.m === 1 && now - lastTrace >= 5) {
-        lastTrace = now;
-        log(`flush watch: ${JSON.stringify({ m: ev.m, p: ev.p, pr: ev.pr, fl: ev.fl, process: ev.process })}`);
-      }
-
       const onUtility = ev.process?.u != null ? ev.process.u === 1 : isUtility;
       const active = ev.process?.a === 1 && onUtility;
 
       if (active) {
-        if (!run) run = { startedAt: now - (ev.process?.e ?? 0) / 1000, lastSeen: now, label: ev.p ?? "utility profile" };
-        else run.lastSeen = now;
+        if (!run) {
+          run = { startedAt: now - (ev.process?.e ?? 0) / 1000, lastSeen: now, label: ev.p ?? "utility profile" };
+          log(`flush watch: ${run.label} started`);
+        } else run.lastSeen = now;
       } else if (run) {
         finish(now);
       }

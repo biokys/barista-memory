@@ -136,9 +136,9 @@ was invisible to ingest. Backflushes are therefore watched live:
 and `flushWatch.ts` logs a backflush when the selected profile is utility and
 a process is active for ≥ 20 s. The `evt:status` shape differs between
 firmware versions (the device omits `pr`, `fl` and `process` when idle, and
-the checkout is older than the device), so the watcher traces one status line
-per 5 s to the journal while a utility profile is selected in brew mode —
-look there first when a flush was not logged. The index path still exists:
+the checkout is older than the device), ; the watcher logs a line when a
+utility run starts and when it is logged or discarded (the 5 s trace that
+found the two-message shape was removed in 0.3.7 as journal noise). The index path still exists:
 a run on a profile that was *not* flagged utility at the time (shot 406, made
 before the flag was set) is classified `kind = 'flush'` by profile id, and the
 `shot_context` view filters on `kind = 'shot'` so every statistic, the history
