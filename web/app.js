@@ -39,6 +39,9 @@ function renderNav(active) {
 async function navigate() {
   const hash = location.hash || "#/";
   const view = document.getElementById("view");
+  // Freeze the height while the next view loads: destroying the old charts
+  // shrinks the page and the scrollbar flashes otherwise.
+  view.style.minHeight = view.offsetHeight + "px";
   if (cleanup) { try { cleanup(); } catch {} cleanup = null; }
   for (const r of routes) {
     const m = hash.match(r.path);
@@ -55,6 +58,7 @@ async function navigate() {
       console.error(error);
     }
     view.classList.remove("loading");
+    view.style.minHeight = "";
     view.classList.remove("fade"); void view.offsetWidth; view.classList.add("fade");
     window.scrollTo({ top: 0 });
     return;
