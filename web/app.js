@@ -10,6 +10,7 @@ import { renderShot } from "./views/shot.js";
 import { renderMachine } from "./views/machine.js";
 import { renderStats } from "./views/stats.js";
 import { renderSetup } from "./views/setup.js";
+import { renderCoffees } from "./views/coffees.js";
 import { renderEvents } from "./views/events.js";
 import { renderProfiles } from "./views/profiles.js";
 import { renderSettings } from "./views/settings.js";
@@ -21,13 +22,14 @@ const routes = [
   { path: /^#\/machine\/?$/, view: renderMachine, nav: "machine" },
   { path: /^#\/stats\/?$/, view: renderStats, nav: "stats" },
   { path: /^#\/setup\/?$/, view: renderSetup, nav: "setup" },
+  { path: /^#\/coffees(?:\/(\d+))?\/?$/, view: renderCoffees, nav: "coffees" },
   { path: /^#\/events\/?$/, view: renderEvents, nav: "events" },
   { path: /^#\/settings\/?$/, view: renderSettings, nav: "settings" },
   { path: /^#\/profiles(?:\/([^/]+))?\/?$/, view: renderProfiles, nav: "profiles" },
 ];
 
-const NAV = ["now", "history", "machine", "stats", "setup", "events", "profiles", "settings"];
-const NAV_HREF = { now: "#/", history: "#/shots", machine: "#/machine", stats: "#/stats", setup: "#/setup", events: "#/events", profiles: "#/profiles", settings: "#/settings" };
+const NAV = ["now", "history", "machine", "stats", "setup", "coffees", "events", "profiles", "settings"];
+const NAV_HREF = { now: "#/", history: "#/shots", machine: "#/machine", stats: "#/stats", setup: "#/setup", coffees: "#/coffees", events: "#/events", profiles: "#/profiles", settings: "#/settings" };
 
 let cleanup = null;
 

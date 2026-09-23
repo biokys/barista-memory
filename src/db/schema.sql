@@ -55,14 +55,42 @@ CREATE TABLE IF NOT EXISTS shots (
 
 CREATE INDEX IF NOT EXISTS shots_started_at ON shots (started_at);
 
+-- A coffee as an identity, apart from the periods it was ground in: the
+-- same bag bought again next month is the same coffee, and "what grind did
+-- this one end up at last time" needs that identity, not a text match.
+-- The name and roaster are the identity; roaster may be unknown, hence the
+-- COALESCE in the index. Targets and the usual bag weight belong here too,
+-- since they are properties of the coffee, not of a grind period.
+CREATE TABLE IF NOT EXISTS coffees (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  name              TEXT NOT NULL,
+  roaster           TEXT,
+  origin            TEXT,
+  process           TEXT,                     -- washed | natural | honey | ... free text
+  roast_level       TEXT,                     -- light | medium | dark, free text
+  bag_g             REAL,                     -- weight of the package it comes in
+  target_time_min_s REAL,                     -- the extraction time window aimed for
+  target_time_max_s REAL,
+  target_ratio      REAL,
+  note              TEXT,
+  archived          INTEGER NOT NULL DEFAULT 0,  -- hidden from pickers, kept for history
+  created_at        INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS coffees_identity ON coffees (name, COALESCE(roaster, ''));
+
 -- The brewing context, stored as intervals rather than per shot.
 --
 -- Beans, grind setting and dose change once every many shots, so a row here
 -- opens a period and every shot pulled after it inherits it. Correcting when a
 -- change happened is a single UPDATE of valid_from; no shot rows are touched.
+--
+-- bean and roaster are kept as text beside coffee_id: they predate the
+-- coffees table and let a period be read without the join. When both are
+-- present the coffee wins, so renaming a coffee renames its history.
 CREATE TABLE IF NOT EXISTS setups (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   valid_from    INTEGER NOT NULL,              -- unix seconds; ties are broken by id
+  coffee_id     INTEGER REFERENCES coffees (id),
   bean          TEXT,
   roaster       TEXT,
   roast_date    TEXT,                          -- ISO date, the machine has no such field
@@ -175,8 +203,8 @@ SELECT
   s.machine_settledness,
   s.water_ml,
   s.incomplete,
-  COALESCE(o.bean,          su.bean)          AS bean,
-  su.roaster,
+  COALESCE(o.bean, c.name,  su.bean)          AS bean,
+  COALESCE(c.roaster,       su.roaster)       AS roaster,
   su.roast_date,
   COALESCE(o.grind_setting, su.grind_setting) AS grind_setting,
   COALESCE(o.dose_g,        su.dose_g)        AS dose_g,
@@ -191,6 +219,7 @@ SELECT
   t.rating,
   t.note AS taste_note,
   su.id  AS setup_id,
+  su.coffee_id,
   -- The last event at or before the shot: its "era", for grouping shots by
   -- what equipment and technique they were pulled with.
   (SELECT id FROM events WHERE at <= s.started_at ORDER BY at DESC, id DESC LIMIT 1) AS era_event_id
@@ -202,6 +231,7 @@ LEFT JOIN setups su
     ORDER BY valid_from DESC, id DESC
     LIMIT 1
   )
+LEFT JOIN coffees        c ON c.id = su.coffee_id
 LEFT JOIN shot_overrides o ON o.shot_id = s.id
 LEFT JOIN tastings       t ON t.shot_id = s.id
 WHERE s.kind = 'shot';

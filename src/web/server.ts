@@ -19,6 +19,7 @@ import { massTemperatureSeries, settledness } from "../thermalModel.js";
 import { changeMode, SWITCHABLE_MODES } from "../machineControl.js";
 import { handleMcpRequest, mcpEnabled } from "../mcp/http.js";
 import { recordSetup, updateSetup } from "../setups.js";
+import { listCoffees, coffeeSummary, createCoffee, updateCoffee } from "../coffees.js";
 import { loadArchivedShot, pressureSparkline } from "../shots.js";
 import { saveProfileMerged, selectProfileOnMachine } from "../profiles.js";
 import { statsSummary } from "../stats.js";
@@ -152,6 +153,7 @@ route("GET", "/api/shots", async (_req, res, _p, url) => {
     if (value) { where.push(clause); params.push(cast(value)); }
   };
   add("bean = ?", q.get("bean"));
+  add("coffee_id = ?", q.get("coffee"), Number);
   add("profile_name = ?", q.get("profile"));
   add("started_at >= ?", q.get("since"), Number);
   add("started_at <= ?", q.get("until"), Number);
@@ -269,17 +271,70 @@ route("GET", "/api/setups", async (_req, res) => {
 route("POST", "/api/setups", async (req, res) => {
   const body = await readJson(req);
   const change: Record<string, unknown> = {};
-  for (const key of ["bean", "roaster", "roast_date", "grind_setting", "dose_g", "basket", "note", "valid_from"]) {
-    if (body[key] !== undefined && body[key] !== "") change[key] = key === "dose_g" || key === "valid_from" ? Number(body[key]) : body[key];
+  for (const key of ["coffee_id", "bean", "roaster", "roast_date", "grind_setting", "dose_g", "basket", "note", "valid_from"]) {
+    if (body[key] !== undefined && body[key] !== "") change[key] = key === "dose_g" || key === "valid_from" || key === "coffee_id" ? Number(body[key]) : body[key];
   }
-  json(res, 200, { setup: recordSetup(db, change) });
+  // An explicit null clears the coffee; Number(null) would have made it 0.
+  if (body.coffee_id === null) change.coffee_id = null;
+  try {
+    json(res, 200, { setup: recordSetup(db, change) });
+  } catch (error) {
+    json(res, 400, { error: "INVALID", message: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 route("PATCH", "/api/setups/:id", async (req, res, p) => {
   const body = await readJson(req);
-  const setup = updateSetup(db, Number(p.id), body);
-  if (!setup) return json(res, 404, { error: "SETUP_NOT_FOUND" });
-  json(res, 200, { setup });
+  if (body.coffee_id !== undefined && body.coffee_id !== null && body.coffee_id !== "") body.coffee_id = Number(body.coffee_id);
+  if (body.coffee_id === "") body.coffee_id = null;
+  try {
+    const setup = updateSetup(db, Number(p.id), body);
+    if (!setup) return json(res, 404, { error: "SETUP_NOT_FOUND" });
+    json(res, 200, { setup });
+  } catch (error) {
+    json(res, 400, { error: "INVALID", message: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// Coffees: identities the periods point at. Errors from the module are
+// short codes; COFFEE_EXISTS is the one the form has to explain.
+function coffeeError(res: ServerResponse, error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message === "COFFEE_EXISTS") return json(res, 409, { error: "COFFEE_EXISTS", message: "A coffee with this name and roaster already exists" });
+  json(res, 400, { error: "INVALID", message });
+}
+
+route("GET", "/api/coffees", async (_req, res, _p, url) => {
+  json(res, 200, { coffees: listCoffees(db, url.searchParams.get("archived") === "1") });
+});
+
+route("GET", "/api/coffees/:id", async (_req, res, p) => {
+  const coffee = coffeeSummary(db, Number(p.id));
+  if (!coffee) return json(res, 404, { error: "COFFEE_NOT_FOUND" });
+  const shots = db.prepare("SELECT * FROM shot_context WHERE coffee_id = ? ORDER BY started_at DESC LIMIT 200").all(coffee.id) as unknown as ShotContextRow[];
+  json(res, 200, {
+    coffee,
+    shots: shots.map((s) => ({ ...s, sparkline: pressureSparkline(db, s.id) })),
+    setups: db.prepare("SELECT * FROM setups WHERE coffee_id = ? ORDER BY valid_from DESC, id DESC").all(coffee.id),
+  });
+});
+
+route("POST", "/api/coffees", async (req, res) => {
+  try {
+    json(res, 200, { coffee: createCoffee(db, await readJson(req)) });
+  } catch (error) {
+    coffeeError(res, error);
+  }
+});
+
+route("PATCH", "/api/coffees/:id", async (req, res, p) => {
+  try {
+    const coffee = updateCoffee(db, Number(p.id), await readJson(req));
+    if (!coffee) return json(res, 404, { error: "COFFEE_NOT_FOUND" });
+    json(res, 200, { coffee });
+  } catch (error) {
+    coffeeError(res, error);
+  }
 });
 
 route("GET", "/api/events", async (_req, res) => {

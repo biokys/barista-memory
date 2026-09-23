@@ -1,7 +1,10 @@
 import type { DatabaseSync } from "node:sqlite";
 import { currentSetup, type SetupRow } from "./db/db.js";
+import { getCoffee, findOrCreateCoffee } from "./coffees.js";
 
 export interface SetupChange {
+  /** A coffee by id; null clears it. Wins over bean/roaster when both are given. */
+  coffee_id?: number | null;
   bean?: string;
   roaster?: string;
   roast_date?: string;
@@ -13,7 +16,35 @@ export interface SetupChange {
   valid_from?: number;
 }
 
-const INHERITED = ["bean", "roaster", "roast_date", "grind_setting", "dose_g", "basket"] as const;
+const INHERITED = ["coffee_id", "bean", "roaster", "roast_date", "grind_setting", "dose_g", "basket"] as const;
+
+/**
+ * Which coffee a change names, in all three ways it can: by id, by
+ * bean/roaster text (the MCP tools and the controls panel speak text, and a
+ * pair not seen before becomes a new coffee), or not at all (inherit).
+ * Returns the id and the text to store beside it, kept in step so a period
+ * reads the same with and without the join.
+ */
+function resolveCoffee(
+  db: DatabaseSync,
+  change: SetupChange,
+  base: { coffee_id: number | null; bean: string | null; roaster: string | null } | null
+): { coffee_id: number | null; bean: string | null; roaster: string | null } {
+  if (change.coffee_id !== undefined) {
+    if (change.coffee_id === null) return { coffee_id: null, bean: null, roaster: null };
+    const coffee = getCoffee(db, change.coffee_id);
+    if (!coffee) throw new Error(`No coffee with id ${change.coffee_id}`);
+    return { coffee_id: coffee.id, bean: coffee.name, roaster: coffee.roaster };
+  }
+  if (change.bean === undefined && change.roaster === undefined) {
+    return { coffee_id: base?.coffee_id ?? null, bean: base?.bean ?? null, roaster: base?.roaster ?? null };
+  }
+  const bean = (change.bean !== undefined ? change.bean : base?.bean)?.trim() || null;
+  const roaster = (change.roaster !== undefined ? change.roaster : base?.roaster)?.trim() || null;
+  if (!bean) return { coffee_id: null, bean: null, roaster };
+  const coffee = findOrCreateCoffee(db, bean, roaster);
+  return { coffee_id: coffee.id, bean: coffee.name, roaster: coffee.roaster };
+}
 
 /**
  * Open a new setup period, carrying forward everything the caller did not name.
@@ -35,10 +66,11 @@ export function recordSetup(db: DatabaseSync, change: SetupChange): SetupRow {
   const merged: Record<string, unknown> = {};
   for (const field of INHERITED) {
     const value = field in change ? (change as any)[field] : previous?.[field] ?? null;
-    // Bean and roaster arrive from text fields, where a trailing space is easy
-    // to leave behind and would split one coffee into two when grouping shots.
+    // Text fields, where a trailing space is easy to leave behind and would
+    // split one value into two when grouping shots.
     merged[field] = typeof value === "string" ? value.trim() || null : value;
   }
+  Object.assign(merged, resolveCoffee(db, change, previous));
 
   // A change that changes nothing opens no period. The controls panel always
   // sends its current grind, so pressing the button twice — or pressing it for
@@ -50,10 +82,11 @@ export function recordSetup(db: DatabaseSync, change: SetupChange): SetupRow {
   }
 
   db.prepare(
-    `INSERT INTO setups (valid_from, bean, roaster, roast_date, grind_setting, dose_g, basket, note, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO setups (valid_from, coffee_id, bean, roaster, roast_date, grind_setting, dose_g, basket, note, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     validFrom,
+    merged.coffee_id as number | null,
     merged.bean as string | null,
     merged.roaster as string | null,
     merged.roast_date as string | null,
@@ -75,7 +108,7 @@ export function moveSetup(db: DatabaseSync, setupId: number, validFrom: number):
   return db.prepare("SELECT * FROM setups WHERE id = ?").get(setupId) as unknown as SetupRow;
 }
 
-const EDITABLE = ["bean", "roaster", "roast_date", "grind_setting", "dose_g", "basket", "note"] as const;
+const EDITABLE = ["roast_date", "grind_setting", "dose_g", "basket", "note"] as const;
 
 /**
  * Correct the values of an existing setup period.
@@ -96,6 +129,11 @@ export function updateSetup(db: DatabaseSync, setupId: number, change: SetupChan
     const raw = (change as any)[field];
     assignments.push(`${field} = ?`);
     values.push(typeof raw === "string" ? raw.trim() || null : (raw ?? null));
+  }
+  if (change.coffee_id !== undefined || change.bean !== undefined || change.roaster !== undefined) {
+    const coffee = resolveCoffee(db, change, existing);
+    assignments.push("coffee_id = ?", "bean = ?", "roaster = ?");
+    values.push(coffee.coffee_id, coffee.bean, coffee.roaster);
   }
   if (change.valid_from !== undefined) {
     assignments.push("valid_from = ?");

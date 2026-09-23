@@ -5,10 +5,16 @@ import { fmt, toast } from "../lib/fmt.js";
 const toLocalInput = (unix) => { const d = new Date(unix * 1000); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
 const fromLocalInput = (s) => Math.floor(new Date(s).getTime() / 1000);
 
+/** A select over the known coffees, with a way to type a new one. */
+function coffeePicker(coffees, selectedId, allowNew) {
+  const options = coffees.map((c) => `<option value="${c.id}" ${c.id === selectedId ? "selected" : ""}>${c.name}${c.roaster ? ` · ${c.roaster}` : ""}</option>`).join("");
+  return `<select name="coffee_id" class="btn sm" style="width:100%"><option value="">–</option>${options}${allowNew ? `<option value="new">${t("setup.new_coffee")}</option>` : ""}</select>`;
+}
+
 export async function renderSetup(view) {
   let editing = null;
   const load = async () => {
-    const data = await api.setups();
+    const [data, { coffees }] = await Promise.all([api.setups(), api.coffees()]);
     const cur = data.current;
     view.innerHTML = `
       <h1>${t("setup.title")}</h1>
@@ -28,8 +34,7 @@ export async function renderSetup(view) {
             ${editing === s.id ? `
               <form class="form edit" style="margin-top:8px">
                 <div class="grid cols-3">
-                  <div class="field"><label>${t("setup.bean")}</label><input name="bean" value="${s.bean ?? ""}"></div>
-                  <div class="field"><label>${t("setup.roaster")}</label><input name="roaster" value="${s.roaster ?? ""}"></div>
+                  <div class="field"><label>${t("setup.coffee")}</label>${coffeePicker(coffees, s.coffee_id, false)}</div>
                   <div class="field"><label>${t("setup.roast_date")}</label><input type="date" name="roast_date" value="${s.roast_date ?? ""}"></div>
                   <div class="field"><label>${t("setup.grind")}</label><input name="grind_setting" value="${s.grind_setting ?? ""}"></div>
                   <div class="field"><label>${t("setup.dose")}</label><input type="number" step="0.1" name="dose_g" value="${s.dose_g ?? ""}"></div>
@@ -46,9 +51,10 @@ export async function renderSetup(view) {
           <div class="card-head"><h2>${t("setup.change")}</h2></div>
           <p class="faint small" style="margin-bottom:12px">${t("setup.change_hint")}</p>
           <form class="form" id="f">
-            <div class="grid cols-2">
-              <div class="field"><label>${t("setup.bean")}</label><input name="bean" placeholder="${cur?.bean ?? ""}"></div>
-              <div class="field"><label>${t("setup.roaster")}</label><input name="roaster" placeholder="${cur?.roaster ?? ""}"></div>
+            <div class="field"><label>${t("setup.coffee")}</label>${coffeePicker(coffees, cur?.coffee_id ?? null, true)}</div>
+            <div class="grid cols-2" id="new-coffee" style="display:none">
+              <div class="field"><label>${t("setup.bean")}</label><input name="bean"></div>
+              <div class="field"><label>${t("setup.roaster")}</label><input name="roaster"></div>
             </div>
             <div class="field"><label>${t("setup.grind")} · <span class="range-v num" id="gv">${cur?.grind_setting ?? "12.5"}</span></label><input type="range" name="grind_setting" min="0" max="90" step="0.1" value="${cur?.grind_setting ?? 12.5}"></div>
             <div class="field"><label>${t("setup.dose")} · <span class="range-v num" id="dv">${cur?.dose_g ?? "18"}</span></label><input type="range" name="dose_g" min="12" max="24" step="0.1" value="${cur?.dose_g ?? 18}"></div>
@@ -66,11 +72,20 @@ export async function renderSetup(view) {
     const f = view.querySelector("#f");
     f.grind_setting.oninput = () => (view.querySelector("#gv").textContent = f.grind_setting.value);
     f.dose_g.oninput = () => (view.querySelector("#dv").textContent = f.dose_g.value);
+    const newCoffee = view.querySelector("#new-coffee");
+    // display, not the hidden attribute: .grid's display:grid would win over it.
+    f.coffee_id.onchange = () => { const isNew = f.coffee_id.value === "new"; newCoffee.style.display = isNew ? "" : "none"; if (isNew) f.bean.focus(); };
     f.onsubmit = async (e) => {
       e.preventDefault();
       const change = Object.fromEntries([...new FormData(f)].filter(([, v]) => v !== ""));
+      // "New coffee" means the typed name and roaster; otherwise the pick wins
+      // and the text fields are hidden anyway. An empty pick clears the coffee.
+      if (change.coffee_id === "new") delete change.coffee_id;
+      else { change.coffee_id = f.coffee_id.value === "" ? null : Number(f.coffee_id.value); delete change.bean; delete change.roaster; }
+      if (change.coffee_id === null && cur?.coffee_id == null) delete change.coffee_id;
       const before = cur?.id;
-      const r = await api.recordSetup(change);
+      let r;
+      try { r = await api.recordSetup(change); } catch (err) { toast(err.message, "bad"); return; }
       toast(r.setup.id === before ? t("setup.unchanged") : t("setup.saved", { bean: r.setup.bean ?? "?", grind: r.setup.grind_setting ?? "?", dose: r.setup.dose_g ?? "?" }));
       editing = null; load();
     };
@@ -82,6 +97,7 @@ export async function renderSetup(view) {
       const change = Object.fromEntries([...new FormData(editForm)]);
       change.valid_from = fromLocalInput(change.valid_from);
       if (change.dose_g !== "") change.dose_g = Number(change.dose_g); else delete change.dose_g;
+      change.coffee_id = change.coffee_id === "" ? null : Number(change.coffee_id);
       await api.updateSetup(editing, change);
       toast(t("setup.updated")); editing = null; load();
     };

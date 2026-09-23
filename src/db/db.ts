@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** Bump when a migration is added below. */
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 8;
 
 /**
  * Changes that CREATE ... IF NOT EXISTS cannot make on their own.
@@ -79,6 +79,40 @@ function migrate(db: DatabaseSync, from: number): void {
       `);
     }
   }
+
+  // Last, because the step above rebuilds setups without this column.
+  if (from < 8) {
+    // Coffees became rows of their own; a period points at one. The rows
+    // themselves are created in backfill(), after schema.sql has made the
+    // table, from the distinct bean/roaster pairs already recorded.
+    const columns = db.prepare("PRAGMA table_info(setups)").all() as Array<{ name: string }>;
+    if (columns.length > 0 && !columns.some((column) => column.name === "coffee_id")) {
+      db.exec("ALTER TABLE setups ADD COLUMN coffee_id INTEGER REFERENCES coffees (id)");
+    }
+    db.exec("DROP VIEW IF EXISTS shot_context");
+  }
+}
+
+/**
+ * Data a migration needs the new tables for, so it runs after schema.sql.
+ * Every step must be a no-op on a database that already has the data.
+ */
+function backfill(db: DatabaseSync, from: number): void {
+  if (from < 8) {
+    // One coffee per distinct name/roaster pair that any period used, then
+    // point the periods at them. Text stays on the period as well (see
+    // schema.sql), so nothing that read bean/roaster before needs to change.
+    db.exec(`
+      INSERT OR IGNORE INTO coffees (name, roaster, created_at)
+        SELECT TRIM(bean), NULLIF(TRIM(COALESCE(roaster, '')), ''), MIN(created_at)
+        FROM setups WHERE bean IS NOT NULL AND TRIM(bean) != ''
+        GROUP BY TRIM(bean), NULLIF(TRIM(COALESCE(roaster, '')), '');
+      UPDATE setups SET coffee_id = (
+        SELECT id FROM coffees c
+        WHERE c.name = TRIM(setups.bean) AND COALESCE(c.roaster, '') = TRIM(COALESCE(setups.roaster, ''))
+      ) WHERE coffee_id IS NULL AND bean IS NOT NULL AND TRIM(bean) != '';
+    `);
+  }
 }
 
 /**
@@ -126,6 +160,7 @@ export function openDatabase(path: string): DatabaseSync {
   seedMaintenanceTypes(db);
 
   if (current < SCHEMA_VERSION) {
+    backfill(db, current);
     db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   }
   return db;
@@ -134,6 +169,7 @@ export function openDatabase(path: string): DatabaseSync {
 export interface SetupRow {
   id: number;
   valid_from: number;
+  coffee_id: number | null;
   bean: string | null;
   roaster: string | null;
   roast_date: string | null;
@@ -170,6 +206,7 @@ export interface ShotContextRow {
   rating: number | null;
   taste_note: string | null;
   setup_id: number | null;
+  coffee_id: number | null;
   era_event_id: number | null;
 }
 

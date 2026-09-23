@@ -15,6 +15,7 @@ import { maintenanceStatus, logMaintenance, listMaintenanceLog, markLastFlushAsC
 import { groupSettings } from "../device/machineSettings.js";
 import { PHASE_ARRAY_SCHEMA } from "./profileSchema.js";
 import { recordSetup, moveSetup, updateSetup } from "../setups.js";
+import { listCoffees, coffeeSummary, createCoffee, updateCoffee } from "../coffees.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "../ingest.js";
 import { powerSessions, currentConditions, MODE_NAMES } from "../machineState.js";
 
@@ -39,10 +40,12 @@ const TOOLS: Tool[] = [
     description:
       "Record a change to the brewing context — new beans, a grind adjustment, a different dose. " +
       "Only pass what changed: every field left out keeps its current value. This opens a new period, so " +
-      "shots already archived keep the context they were actually pulled under.",
+      "shots already archived keep the context they were actually pulled under. Name the coffee by " +
+      "coffee_id (see list_coffees) or by bean + roaster; a pair not seen before becomes a new coffee.",
     inputSchema: {
       type: "object",
       properties: {
+        coffee_id: { type: "number", description: "A coffee from list_coffees; wins over bean/roaster" },
         bean: { type: "string", description: "Bean name, e.g. 'Rwanda Kinini'" },
         roaster: { type: "string", description: "Roaster name" },
         roast_date: { type: "string", description: "Roast date as YYYY-MM-DD" },
@@ -99,6 +102,41 @@ const TOOLS: Tool[] = [
         valid_from: { type: "number", description: "Unix seconds; same effect as move_setup" },
       },
       required: ["setup_id"],
+    },
+  },
+  {
+    name: "list_coffees",
+    description:
+      "Coffees the archive knows, with how many shots each has, when it was last used, its average rating " +
+      "and ratio, and its targets (time window, ratio) and bag weight if set. in_use marks the current one.",
+    inputSchema: { type: "object", properties: { include_archived: { type: "boolean" } } },
+  },
+  {
+    name: "get_coffee",
+    description: "One coffee with its summary, its setup periods and its shots (newest first).",
+    inputSchema: { type: "object", properties: { coffee_id: { type: "number" } }, required: ["coffee_id"] },
+  },
+  {
+    name: "save_coffee",
+    description:
+      "Create a coffee, or update one when coffee_id is given. Only the fields passed change. " +
+      "Targets are what the dial-in aims for: an extraction time window and a ratio.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        coffee_id: { type: "number", description: "Omit to create" },
+        name: { type: "string" },
+        roaster: { type: "string" },
+        origin: { type: "string", description: "Country or region" },
+        process: { type: "string", description: "washed, natural, honey, ..." },
+        roast_level: { type: "string", description: "light, medium, dark, ..." },
+        bag_g: { type: "number", description: "Weight of the package, for the stock estimate" },
+        target_time_min_s: { type: "number" },
+        target_time_max_s: { type: "number" },
+        target_ratio: { type: "number", description: "e.g. 2.0 for 1:2" },
+        note: { type: "string" },
+        archived: { type: "boolean", description: "Hide from pickers; history keeps it" },
+      },
     },
   },
   {
@@ -368,7 +406,7 @@ const TOOLS: Tool[] = [
  * against the same database handle the caller owns.
  */
 export function createMcpServer(db: DatabaseSync): Server {
-const server = new Server({ name: "barista-memory", version: "0.3.14" }, { capabilities: { tools: {} } });
+const server = new Server({ name: "barista-memory", version: "0.4.0" }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 
@@ -383,8 +421,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case "set_current_setup": {
-        const setup = recordSetup(db, (args ?? {}) as any);
-        return ok({ setup, message: "New brewing context period recorded" });
+        try {
+          const setup = recordSetup(db, (args ?? {}) as any);
+          return ok({ setup, message: "New brewing context period recorded" });
+        } catch (error) {
+          return fail(error instanceof Error ? error.message : String(error), "INVALID");
+        }
       }
 
       case "list_setups": {
@@ -404,6 +446,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const setup = updateSetup(db, setup_id as number, change);
         if (!setup) return fail(`No setup with id ${setup_id}`, "SETUP_NOT_FOUND");
         return ok({ setup, message: "Setup corrected; shots in that period re-derive their context" });
+      }
+
+      case "list_coffees": {
+        const coffees = listCoffees(db, !!args?.include_archived);
+        return ok({ coffees, count: coffees.length });
+      }
+
+      case "get_coffee": {
+        const coffee = coffeeSummary(db, args!.coffee_id as number);
+        if (!coffee) return fail(`No coffee with id ${args!.coffee_id}`, "COFFEE_NOT_FOUND");
+        const setups = db.prepare("SELECT * FROM setups WHERE coffee_id = ? ORDER BY valid_from DESC, id DESC").all(coffee.id);
+        const shots = db.prepare("SELECT * FROM shot_context WHERE coffee_id = ? ORDER BY started_at DESC LIMIT 100").all(coffee.id);
+        return ok({ coffee, setups, shots });
+      }
+
+      case "save_coffee": {
+        const { coffee_id, ...input } = (args ?? {}) as any;
+        try {
+          if (coffee_id != null) {
+            const coffee = updateCoffee(db, coffee_id as number, input);
+            if (!coffee) return fail(`No coffee with id ${coffee_id}`, "COFFEE_NOT_FOUND");
+            return ok({ coffee, message: "Coffee updated" });
+          }
+          return ok({ coffee: createCoffee(db, input), message: "Coffee created" });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          return fail(message === "COFFEE_EXISTS" ? "A coffee with this name and roaster already exists" : message, message === "COFFEE_EXISTS" ? "COFFEE_EXISTS" : "INVALID");
+        }
       }
 
       case "record_event": {
