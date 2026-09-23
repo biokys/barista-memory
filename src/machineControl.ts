@@ -1,4 +1,5 @@
 import { fetchStatus, wsSend } from "./device/client.js";
+import { forgetLiveStatus } from "./liveStatus.js";
 import { MODE_NAMES } from "./machineState.js";
 
 /**
@@ -34,6 +35,18 @@ export async function changeMode(mode: string): Promise<ModeChange> {
   if (!before) return { ok: false, code: "MACHINE_UNREACHABLE", message: "No answer from the machine" };
   const previous = MODE_NAMES[before.mode] ?? String(before.mode);
   if (before.mode === target) return { ok: true, mode: mode as SwitchableMode, previous };
+  // The interactive cache still holds the status read a moment ago (the
+  // route's reachability check), so the page redrawn right after the change
+  // showed the old mode until the next poll. Forget it on every outcome:
+  // even an unconfirmed change may have happened late.
+  try {
+    return await switchAndConfirm(target, mode as SwitchableMode, previous);
+  } finally {
+    forgetLiveStatus();
+  }
+}
+
+async function switchAndConfirm(target: number, mode: SwitchableMode, previous: string): Promise<ModeChange> {
 
   if (!(await wsSend({ tp: "req:change-mode", mode: target }))) {
     return { ok: false, code: "MACHINE_UNREACHABLE", message: "Could not send the request to the machine" };
@@ -43,7 +56,7 @@ export async function changeMode(mode: string): Promise<ModeChange> {
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, CONFIRM_POLL_MS));
     const now = await fetchStatus();
-    if (now?.mode === target) return { ok: true, mode: mode as SwitchableMode, previous };
+    if (now?.mode === target) return { ok: true, mode, previous };
   }
   return {
     ok: false,

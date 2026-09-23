@@ -24,7 +24,7 @@ import { getCoffee } from "../coffees.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "../ingest.js";
 import { powerSessions, currentConditions, MODE_NAMES } from "../machineState.js";
 
-const MCP_VERSION = "0.4.8";
+const MCP_VERSION = "0.4.9";
 
 function ok(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload) }] };
