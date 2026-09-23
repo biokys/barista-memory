@@ -16,7 +16,7 @@ export async function renderMachine(view) {
         <div class="row">${Object.keys(RANGES).map((k) => `<button class="btn sm ${k === range ? "primary" : "ghost"}" data-r="${k}">${t("machine.range." + k)}</button>`).join("")}</div></div>
       <section class="card">
         <div class="card-head"><h2>${t("machine.temperature_history")}</h2></div>
-        <div class="chart" id="chart"></div>
+        <div class="chart chart-machine" id="chart"></div>
         ${state.samples.length ? "" : `<p class="empty">${t("machine.no_samples")}</p>`}
       </section>
       <div class="grid cols-2">

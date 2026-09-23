@@ -171,6 +171,12 @@ textarea { width: 100%; resize: vertical; }
 
 /* ---- charts ---- */
 .chart { position: relative; }
+/* Reserve the drawn height (plot + readout row) before uPlot runs, so the
+   page does not grow after the view appears — every late growth makes the
+   scrollbar flash, most visibly inside Home Assistant's iframe. */
+.chart-shot { min-height: 342px; }
+.chart-machine { min-height: 322px; }
+.chart-stat { min-height: 302px; }
 .uplot { font-family: var(--font) !important; }
 .u-legend { font-size: .78rem !important; color: var(--text-2) !important; }
 .u-legend .u-marker { border-radius: 2px; }

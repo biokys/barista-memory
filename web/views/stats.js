@@ -18,8 +18,8 @@ export async function renderStats(view) {
       <div class="card stat"><span class="v num">${tot.weight_from_curve}</span><span class="l">${t("stats.weight_fixed")}</span></div>
     </div>
     ${s.points.length < 3 ? `<p class="empty">${t("stats.empty")}</p>` : `
-    <section class="card"><div class="card-head"><h2>${t("stats.ratio_time")}</h2><span class="faint small">${t("stats.ratio_time_hint")}</span></div><div class="chart" id="c1"></div></section>
-    <section class="card"><div class="card-head"><h2>${t("stats.settledness")}</h2><span class="faint small">${t("stats.settledness_hint")}</span></div><div class="chart" id="c2"></div></section>`}
+    <section class="card"><div class="card-head"><h2>${t("stats.ratio_time")}</h2><span class="faint small">${t("stats.ratio_time_hint")}</span></div><div class="chart chart-stat" id="c1"></div></section>
+    <section class="card"><div class="card-head"><h2>${t("stats.settledness")}</h2><span class="faint small">${t("stats.settledness_hint")}</span></div><div class="chart chart-stat" id="c2"></div></section>`}
     ${s.perEra?.length ? `<section class="card"><div class="card-head"><h2>${t("stats.per_era")}</h2><span class="faint small">${t("stats.per_era_hint")}</span></div>
       <table><thead><tr><th>${t("stats.col.era")}</th><th class="r">${t("stats.col.shots")}</th><th class="r">${t("stats.col.ratio")}</th><th class="r">${t("stats.col.seconds")}</th><th class="r">${t("stats.col.rating")}</th></tr></thead>
       <tbody>${s.perEra.map((e) => `<tr><td><span class="pill accent">${t("events.kind." + e.kind)}</span> ${e.title}<br><span class="faint small">${fmt.dateTime(e.at)}</span></td><td class="r num">${e.shots}</td><td class="r num">${e.avg_ratio != null ? "1:" + e.avg_ratio.toFixed(2) : "–"}</td><td class="r num">${e.avg_seconds ?? "–"} s</td><td class="r num">${e.avg_rating ?? "–"}</td></tr>`).join("")}</tbody></table></section>` : ""}
