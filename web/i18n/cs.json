@@ -368,5 +368,19 @@
   "machine.coffee_at": "Káva v",
   "machine.switch_on_at": "zapnout v {on} (~{minutes} min)",
   "machine.switch_on_now": "na {at} zapnout hned",
-  "machine.from_cold": "od studena ~{minutes} min"
+  "machine.from_cold": "od studena ~{minutes} min",
+  "anomaly.title": "Křivka",
+  "anomaly.none": "bez nálezu",
+  "anomaly.pending": "zatím nevyhodnoceno",
+  "anomaly.deviation": "odchylka {pct} % od {n} předchozích",
+  "anomaly.channeling": "channeling",
+  "anomaly.choked": "ucpaný puk",
+  "anomaly.low_pressure": "nízký tlak",
+  "anomaly.temperature_unstable": "kolísá teplota",
+  "anomaly.off_pattern": "jiný průběh",
+  "anomaly.hint.channeling": "Během hlavní extrakce spadl tlak o 1,5 bar a průtok skočil nahoru: otevřel se kanálek. Zkontroluj distribuci a pěchování.",
+  "anomaly.hint.choked": "Ani po 20 s nic v šálku: příliš jemně nebo příliš mnoho kávy.",
+  "anomaly.hint.low_pressure": "Tlak nepřesáhl 5 bar: příliš hrubě, nebo málo kávy v košíku.",
+  "anomaly.hint.temperature_unstable": "Teplota během hlavní extrakce kolísala o víc než 3 °C.",
+  "anomaly.hint.off_pattern": "Průtok se liší od předchozích shotů se stejnou kávou, mletím, dávkou a profilem o víc než 35 %."
 }

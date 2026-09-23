@@ -10,6 +10,7 @@ import { config } from "./config.js";
 import { openDatabase, currentSetup } from "./db/db.js";
 import { recordSetup, updateSetup, type SetupChange } from "./setups.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "./ingest.js";
+import { recomputeAnalysis } from "./anomaly.js";
 import { fetchStatus, parseSlog } from "./device/client.js";
 import { TAU_HEAT_MIN } from "./thermalModel.js";
 import { recordEvent, listEvents } from "./events.js";
@@ -63,6 +64,8 @@ function usage(): never {
       "  cli calibrate     Bloom temperature vs. modelled settledness, per shot (for tuning TAU_HEAT)",
       "  cli recompute-context [--all]",
       "      Re-derive each shot's machine warm-up context from machine_state.",
+      "  cli recompute-analysis [--all]",
+      "      Re-derive each shot's curve flags (channeling, choked, off pattern) from the stored logs.",
     ].join("\n")
   );
   process.exit(2);
@@ -284,6 +287,12 @@ try {
             `${(row.sd == null ? "?" : row.sd + " %").padStart(7)}  ${avg.toFixed(1).padStart(8)}  ${String(target).padStart(3)}   ${(avg - target >= 0 ? "+" : "") + (avg - target).toFixed(1)}`
         );
       }
+      break;
+    }
+
+    case "recompute-analysis": {
+      const changed = recomputeAnalysis(db, args.all === "true");
+      console.log(`analysed ${changed} shot(s)`);
       break;
     }
 

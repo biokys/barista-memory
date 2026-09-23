@@ -3,6 +3,7 @@ import { config } from "./config.js";
 import { openDatabase, type ShotContextRow } from "./db/db.js";
 import { fetchIndex, fetchSlog, parseSlog } from "./device/client.js";
 import { stableWeight } from "./stableWeight.js";
+import { recomputeAnalysis } from "./anomaly.js";
 import { powerSessions, machineContextForShot, allStateSamples, coldBaseline } from "./machineState.js";
 import { syncNotes } from "./notesSync.js";
 import { classifyShots, utilityProfileIds } from "./maintenance.js";
@@ -225,6 +226,9 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
       }
     }
   }
+
+  // Curves are judged once the kind is known, so a flush is never analysed.
+  if (sawNew) recomputeAnalysis(db);
 
   return result;
 }

@@ -7,6 +7,7 @@ function badges(s) {
   if (s.stable_weight_source === "curve") out.push(`<span class="pill warn">${t("history.badge.curve")}</span>`);
   if (s.stable_weight_source === "none") out.push(`<span class="pill bad">${t("history.badge.noweight")}</span>`);
   if (s.machine_settledness != null && s.machine_settledness < 60) out.push(`<span class="pill bad">${t("history.badge.cold")}</span>`);
+  for (const f of s.flags || []) out.push(`<span class="pill ${f === "off_pattern" ? "warn" : "bad"}" title="${t("anomaly.hint." + f)}">${t("anomaly." + f)}</span>`);
   return out.join(" ");
 }
 

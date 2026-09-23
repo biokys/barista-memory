@@ -22,6 +22,7 @@ import { recordSetup, updateSetup } from "../setups.js";
 import { listCoffees, coffeeSummary, createCoffee, updateCoffee } from "../coffees.js";
 import { agingPoints, bags, currentStock, stockWarnG } from "../coffeeStats.js";
 import { suggestFor, verdictFor } from "../dialin.js";
+import { getAnalysis, analysesFor } from "../anomaly.js";
 import { setSetting } from "../settings.js";
 import { loadArchivedShot, pressureSparkline } from "../shots.js";
 import { saveProfileMerged, selectProfileOnMachine } from "../profiles.js";
@@ -150,7 +151,7 @@ route("GET", "/api/now", async (_req, res) => {
       verdict: last ? verdictFor(db, last) : null,
     },
     maintenance: maintenanceStatus(db).filter((m) => m.enabled),
-    last_shot: last ? { ...last, sparkline: pressureSparkline(db, last.id) } : null,
+    last_shot: last ? { ...last, sparkline: pressureSparkline(db, last.id), flags: getAnalysis(db, last.id)?.flags ?? [] } : null,
     server_time: Math.floor(Date.now() / 1000),
   });
 });
@@ -172,8 +173,9 @@ route("GET", "/api/shots", async (_req, res, _p, url) => {
     " ORDER BY started_at DESC LIMIT ?";
   const shots = db.prepare(sql).all(...params, limit) as unknown as ShotContextRow[];
   const oldest = shots.length ? shots[shots.length - 1].started_at : 0;
+  const analyses = analysesFor(db, shots.map((s) => s.id));
   json(res, 200, {
-    shots: shots.map((s) => ({ ...s, sparkline: pressureSparkline(db, s.id) })),
+    shots: shots.map((s) => ({ ...s, sparkline: pressureSparkline(db, s.id), flags: analyses.get(s.id)?.flags ?? [], deviation: analyses.get(s.id)?.deviation ?? null })),
     events: listEvents(db, oldest),
     maintenance: listMaintenanceLog(db, 500).filter((m) => m.at >= oldest),
     beans: db.prepare("SELECT DISTINCT bean FROM shot_context WHERE bean IS NOT NULL ORDER BY bean").all().map((r: any) => r.bean),
@@ -257,7 +259,7 @@ route("GET", "/api/shots/:id", async (_req, res, p) => {
   // instead of leading to a "not found" page.
   const prev = db.prepare("SELECT id FROM shot_context WHERE started_at < (SELECT started_at FROM shots WHERE id = ?) ORDER BY started_at DESC LIMIT 1").get(Number(p.id)) as any;
   const next = db.prepare("SELECT id FROM shot_context WHERE started_at > (SELECT started_at FROM shots WHERE id = ?) ORDER BY started_at ASC LIMIT 1").get(Number(p.id)) as any;
-  json(res, 200, { ...loaded, era: eraOf(db, loaded.context.started_at), verdict: verdictFor(db, loaded.context), prev_id: prev?.id ?? null, next_id: next?.id ?? null });
+  json(res, 200, { ...loaded, era: eraOf(db, loaded.context.started_at), verdict: verdictFor(db, loaded.context), analysis: getAnalysis(db, loaded.context.id), prev_id: prev?.id ?? null, next_id: next?.id ?? null });
 });
 
 route("POST", "/api/shots/:id/rating", async (req, res, p) => {
@@ -322,9 +324,10 @@ route("GET", "/api/coffees/:id", async (_req, res, p) => {
   const coffee = coffeeSummary(db, Number(p.id));
   if (!coffee) return json(res, 404, { error: "COFFEE_NOT_FOUND" });
   const shots = db.prepare("SELECT * FROM shot_context WHERE coffee_id = ? ORDER BY started_at DESC LIMIT 200").all(coffee.id) as unknown as ShotContextRow[];
+  const analyses = analysesFor(db, shots.map((s) => s.id));
   json(res, 200, {
     coffee,
-    shots: shots.map((s) => ({ ...s, sparkline: pressureSparkline(db, s.id) })),
+    shots: shots.map((s) => ({ ...s, sparkline: pressureSparkline(db, s.id), flags: analyses.get(s.id)?.flags ?? [] })),
     setups: db.prepare("SELECT * FROM setups WHERE coffee_id = ? ORDER BY valid_from DESC, id DESC").all(coffee.id),
     aging: agingPoints(db, coffee.id),
     bags: bags(db, coffee),

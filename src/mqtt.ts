@@ -7,6 +7,7 @@ import { maintenanceStatus } from "./maintenance.js";
 import { changeMode, SWITCHABLE_MODES } from "./machineControl.js";
 import { printShot, printerSettings } from "./printer/index.js";
 import { currentStock } from "./coffeeStats.js";
+import { getAnalysis } from "./anomaly.js";
 import type { ShotContextRow } from "./db/db.js";
 
 /**
@@ -218,6 +219,7 @@ export function startMqtt(db: DatabaseSync, version: string, log: (line: string)
             grind: last.grind_setting, dose_g: last.dose_g, weight_g: last.stable_weight_g, ratio: last.ratio,
             duration_s: last.duration_ms != null ? Math.round(last.duration_ms / 100) / 10 : null, rating: last.rating,
             machine_settledness: last.machine_settledness,
+            flags: getAnalysis(dbNow, last.id)?.flags ?? [],
             receipt_url: config.webUrl ? `${config.webUrl}/api/shots/${last.id}/receipt.png` : null,
           }
         : null,

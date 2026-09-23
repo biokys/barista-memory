@@ -168,6 +168,19 @@ CREATE TABLE IF NOT EXISTS tastings (
   created_at INTEGER NOT NULL
 );
 
+-- What a shot's own curve says (channeling, choked puck, low pressure, an
+-- unstable temperature) and how far its flow strays from the earlier shots
+-- pulled the same way. A cache: derived from raw_slog by anomaly.ts, redone
+-- for every row whose version is older than the rules, never edited by hand.
+CREATE TABLE IF NOT EXISTS shot_analysis (
+  shot_id        INTEGER PRIMARY KEY REFERENCES shots (id) ON DELETE CASCADE,
+  version        INTEGER NOT NULL,
+  flags          TEXT NOT NULL,                -- JSON array of flag names
+  deviation      REAL,                         -- relative RMS from the baseline median; NULL without one
+  baseline_shots INTEGER NOT NULL DEFAULT 0,
+  computed_at    INTEGER NOT NULL
+);
+
 -- What was last pushed into the device's own notes, so a sync is skipped when
 -- nothing changed and can be re-driven when it did.
 CREATE TABLE IF NOT EXISTS notes_sync (

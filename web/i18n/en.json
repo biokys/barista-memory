@@ -368,5 +368,19 @@
   "machine.coffee_at": "Coffee at",
   "machine.switch_on_at": "switch on at {on} (~{minutes} min)",
   "machine.switch_on_now": "for {at}, switch on now",
-  "machine.from_cold": "from cold ~{minutes} min"
+  "machine.from_cold": "from cold ~{minutes} min",
+  "anomaly.title": "Curve",
+  "anomaly.none": "nothing unusual",
+  "anomaly.pending": "not analysed yet",
+  "anomaly.deviation": "{pct} % off the previous {n}",
+  "anomaly.channeling": "channeling",
+  "anomaly.choked": "choked",
+  "anomaly.low_pressure": "low pressure",
+  "anomaly.temperature_unstable": "unstable temperature",
+  "anomaly.off_pattern": "off pattern",
+  "anomaly.hint.channeling": "During the main extraction pressure fell by 1.5 bar while flow jumped: a channel opened. Check distribution and tamping.",
+  "anomaly.hint.choked": "Nothing in the cup after 20 s: too fine or too much coffee.",
+  "anomaly.hint.low_pressure": "Pressure never passed 5 bar: too coarse, or too little coffee.",
+  "anomaly.hint.temperature_unstable": "Temperature swung by more than 3 °C during the main extraction.",
+  "anomaly.hint.off_pattern": "The flow differs from the previous shots with the same coffee, grind, dose and profile by more than 35 %."
 }

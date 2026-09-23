@@ -18,6 +18,7 @@ import { recordSetup, moveSetup, updateSetup } from "../setups.js";
 import { listCoffees, coffeeSummary, createCoffee, updateCoffee } from "../coffees.js";
 import { agingPoints, bags, currentStock } from "../coffeeStats.js";
 import { suggestFor, verdictFor } from "../dialin.js";
+import { getAnalysis } from "../anomaly.js";
 import { getCoffee } from "../coffees.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "../ingest.js";
 import { powerSessions, currentConditions, MODE_NAMES } from "../machineState.js";
@@ -421,7 +422,7 @@ const TOOLS: Tool[] = [
  * against the same database handle the caller owns.
  */
 export function createMcpServer(db: DatabaseSync): Server {
-const server = new Server({ name: "barista-memory", version: "0.4.3" }, { capabilities: { tools: {} } });
+const server = new Server({ name: "barista-memory", version: "0.4.4" }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 
@@ -558,7 +559,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "get_archived_shot": {
         const loaded = loadArchivedShot(db, args!.shot_id as number, (args?.include_full_curve as boolean) ?? false);
         if (!loaded) return fail(`Shot ${args!.shot_id} is not in the archive`, "SHOT_NOT_FOUND");
-        return ok({ ...loaded, era: eraOf(db, loaded.context.started_at), verdict: verdictFor(db, loaded.context) });
+        return ok({ ...loaded, era: eraOf(db, loaded.context.started_at), verdict: verdictFor(db, loaded.context), analysis: getAnalysis(db, loaded.context.id) });
       }
 
       case "list_profiles": {

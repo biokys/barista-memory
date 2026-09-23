@@ -1,6 +1,7 @@
 import { config } from "./config.js";
 import { openDatabase } from "./db/db.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "./ingest.js";
+import { recomputeAnalysis } from "./anomaly.js";
 import { fetchStatus } from "./device/client.js";
 import { recordState } from "./machineState.js";
 import { startStatusStream } from "./device/statusStream.js";
@@ -39,6 +40,8 @@ async function main(): Promise<void> {
   const backfilled = recomputeStableWeights(db);
   if (backfilled > 0) console.log(`derived stable weight for ${backfilled} shot(s)`);
   const contextualised = recomputeMachineContext(db);
+  const analysed = recomputeAnalysis(db);
+  if (analysed > 0) console.log(`analysed ${analysed} shot(s) missing an analysis or from an older rule set`);
   if (contextualised > 0) console.log(`derived machine context for ${contextualised} shot(s)`);
 
   // Backflushes are never written to the machine's history, so they are
