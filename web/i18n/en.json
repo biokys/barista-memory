@@ -362,5 +362,11 @@
   "dialin.start": "Start at grind {grind} and a {dose} g dose.",
   "dialin.source.coffee": "(from this coffee's history)",
   "dialin.source.roaster": "(after {coffee} from the same roaster)",
-  "dialin.source.global": "(after {coffee}, the latest grind)"
+  "dialin.source.global": "(after {coffee}, the latest grind)",
+  "machine.ready_in": "ready in",
+  "machine.ready_now": "now",
+  "machine.coffee_at": "Coffee at",
+  "machine.switch_on_at": "switch on at {on} (~{minutes} min)",
+  "machine.switch_on_now": "for {at}, switch on now",
+  "machine.from_cold": "from cold ~{minutes} min"
 }

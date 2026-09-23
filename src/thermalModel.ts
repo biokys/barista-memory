@@ -38,6 +38,22 @@ export function settledness(massTemp: number, setpoint: number, baseline = ROOM_
   return Math.round(Math.max(0, Math.min(1, frac)) * 100);
 }
 
+/**
+ * Minutes of heating until the mass is `readyPct` of the way from the cold
+ * level to the setpoint — the inverse of the heating law, for "switch it on
+ * at" and "ready in". Counts only the mass; the boiler's own climb to
+ * setpoint, during which the mass barely moves, is added by the caller.
+ * Zero when already there.
+ */
+export function minutesToReady(massTemp: number, setpoint: number, baseline: number, readyPct: number): number {
+  if (setpoint <= baseline) return 0;
+  const wanted = baseline + (readyPct / 100) * (setpoint - baseline);
+  if (massTemp >= wanted) return 0;
+  // relax(): mass(t) = setpoint + (mass − setpoint)·e^(−t/τ); solve for mass(t) = wanted.
+  const remaining = (setpoint - wanted) / (setpoint - massTemp);
+  return Math.round(-TAU_HEAT_MIN * Math.log(remaining));
+}
+
 function relax(current: number, towards: number, minutes: number, tauMin: number): number {
   return towards + (current - towards) * Math.exp(-minutes / tauMin);
 }

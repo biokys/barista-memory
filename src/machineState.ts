@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { MachineStatus } from "./device/client.js";
-import { massTemperatureAt, settledness, ROOM_TEMP_C } from "./thermalModel.js";
+import { massTemperatureAt, settledness, minutesToReady, ROOM_TEMP_C } from "./thermalModel.js";
+import { config } from "./config.js";
 
 /** Temperature move, in °C, that is worth its own row. */
 const TEMP_EPSILON = 1.0;
@@ -202,6 +203,24 @@ export interface Conditions {
   /** Degrees per minute over the recent samples: positive heating, negative cooling. */
   trend_c_per_min: number | null;
   trend: "heating" | "cooling" | "holding" | null;
+  /** The warm-up percent counted as ready (GAGGIMATE_READY_PCT). */
+  ready_pct: number;
+  /** Minutes from now until ready if the machine heats from its current state; 0 when it is. Null while the mass is unknown. */
+  minutes_to_ready: number | null;
+  /** The same figure for a machine that has gone fully cold — what a morning automation plans with. */
+  minutes_to_ready_from_cold: number;
+  /** How long the boiler itself typically takes to reach setpoint, from past sessions. */
+  boiler_heatup_s: number;
+}
+
+/** When no session has recorded a heat-up yet: the ~2 min a Gaggia Classic needs. */
+const BOILER_HEATUP_FALLBACK_S = 120;
+
+/** The median boiler heat-up of the sessions that recorded one. */
+function typicalHeatupS(sessions: PowerSession[]): number {
+  const values = sessions.map((s) => s.heatup_s).filter((v): v is number => v != null && v > 0).sort((a, b) => a - b);
+  if (!values.length) return BOILER_HEATUP_FALLBACK_S;
+  return values[Math.floor(values.length / 2)];
 }
 
 /** Samples used to estimate the trend. At a 30 s poll that is a few minutes. */
@@ -249,6 +268,15 @@ export function currentConditions(db: DatabaseSync, live: MachineStatus | null):
   const mass = massTemperatureAt(allStateSamples(db), now, baseline);
   const setpoint = live && live.targetTemp > 0 ? live.targetTemp : 94;
 
+  // "Ready in": the mass's remaining climb, plus whatever of the boiler's
+  // own climb is still ahead — all of it when the machine is off or in
+  // standby, the unfinished part while it is heating, none once at target.
+  const boilerHeatup = typicalHeatupS(sessions);
+  const heating = live != null && (live.targetTemp ?? 0) > 0;
+  const boilerAhead = atTarget ? 0 : heating && heatingFor != null ? Math.max(0, boilerHeatup - heatingFor) : boilerHeatup;
+  const massMinutes = mass == null ? null : minutesToReady(mass, setpoint, baseline, config.readyPct);
+  const minutesToReadyNow = massMinutes == null ? null : massMinutes === 0 && atTarget ? 0 : massMinutes + Math.round(boilerAhead / 60);
+
   return {
     reachable: live != null,
     settledness: mass == null ? null : settledness(mass, setpoint, baseline),
@@ -261,6 +289,10 @@ export function currentConditions(db: DatabaseSync, live: MachineStatus | null):
     heating_for_s: heatingFor,
     heatup_s: open?.heatup_s ?? null,
     at_target: atTarget,
+    ready_pct: config.readyPct,
+    minutes_to_ready: minutesToReadyNow,
+    minutes_to_ready_from_cold: minutesToReady(baseline, setpoint, baseline, config.readyPct) + Math.round(boilerHeatup / 60),
+    boiler_heatup_s: boilerHeatup,
     trend_c_per_min: trendPerMin != null ? Math.round(trendPerMin * 100) / 100 : null,
     // A boiler sitting on setpoint is not trending anywhere: the PID cycles
     // around it, and since samples are only stored on a 1 degree move, two

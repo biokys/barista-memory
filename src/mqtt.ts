@@ -92,6 +92,13 @@ export function startMqtt(db: DatabaseSync, version: string, log: (line: string)
       name: "Machine ready", icon: "mdi:coffee-maker-check",
       value_template: "{{ 'ON' if value_json.ready else 'OFF' }}", ...alwaysAvailability,
     }),
+    entity("sensor", "minutes_to_ready", {
+      name: "Minutes to ready", icon: "mdi:timer-sand", unit_of_measurement: "min", device_class: "duration",
+      value_template: "{{ value_json.minutes_to_ready if value_json.minutes_to_ready is not none else 'unknown' }}",
+      json_attributes_topic: stateTopic,
+      json_attributes_template: "{{ {'from_cold_min': value_json.minutes_to_ready_from_cold, 'ready_pct': value_json.ready_pct, 'boiler_heatup_s': value_json.boiler_heatup_s} | tojson }}",
+      ...alwaysAvailability,
+    }),
     entity("binary_sensor", "on", {
       name: "Machine on", device_class: "running",
       value_template: "{{ 'ON' if value_json.reachable else 'OFF' }}", ...alwaysAvailability,
@@ -200,6 +207,11 @@ export function startMqtt(db: DatabaseSync, version: string, log: (line: string)
       target_temp: c.target_temp,
       heating_for_s: c.heating_for_s,
       powered_for_s: c.powered_for_s,
+      // For "switch on at": how long from now, and how long from cold.
+      minutes_to_ready: c.minutes_to_ready,
+      minutes_to_ready_from_cold: c.minutes_to_ready_from_cold,
+      ready_pct: c.ready_pct,
+      boiler_heatup_s: c.boiler_heatup_s,
       last_shot: last
         ? {
             id: last.id, started_at: last.started_at, profile: last.profile_name, bean: last.bean, roaster: last.roaster,

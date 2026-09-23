@@ -125,7 +125,10 @@ discovery messages, so a **Barista Memory** device appears on its own with
 warm-up percent, a *Machine ready* binary sensor (on once the warm-up model
 says the group is hot, 85 % by default with hysteresis), boiler and target
 temperature, the mode as a sensor and as a select that switches the machine,
-the last shot with its context as attributes, and whether maintenance is due.
+the last shot with its context as attributes, whether maintenance is due,
+how many minutes the warm-up model says the machine needs (with the
+from-cold figure as an attribute, so an automation can switch it on in
+time for a coffee at 7:30), and how much of the current bag is left.
 "Tell me when the machine is ready" is then a one-trigger automation. The
 add-on takes the Mosquitto add-on's credentials from the Supervisor, so
 there nothing needs configuring.

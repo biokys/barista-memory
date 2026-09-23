@@ -42,6 +42,42 @@ function dialinBlock(d) {
   return parts.join("");
 }
 
+/** "Ready in": minutes from the current state, or "now" once the warm-up model says so. */
+function readyIn(m) {
+  if (m.minutes_to_ready == null) return "–";
+  if (m.minutes_to_ready === 0) return t("machine.ready_now");
+  return `~${m.minutes_to_ready} min`;
+}
+
+const PLAN_KEY = "coffee_at";
+/** Within this, the machine's current warmth still counts; beyond it, plan from cold. */
+const SOON_MS = 90 * 60000;
+function readPlan() { try { return localStorage.getItem(PLAN_KEY) || ""; } catch { return ""; } }
+
+/**
+ * When to switch on for a coffee at a chosen time: the time minus the
+ * from-cold estimate, or minus the current one if the machine is already
+ * warming. The chosen time is a per-viewer convenience kept in the browser.
+ */
+function planner(m) {
+  const at = readPlan();
+  let advice = "";
+  if (at) {
+    const [h, min] = at.split(":").map(Number);
+    const target = new Date(); target.setHours(h, min, 0, 0);
+    if (target.getTime() < Date.now()) target.setDate(target.getDate() + 1);
+    // A warm machine is only worth counting on for a coffee soon; by tomorrow
+    // morning it has cooled, so anything further off plans from cold.
+    const soon = target.getTime() - Date.now() < SOON_MS;
+    const minutes = soon && m.reachable && m.minutes_to_ready != null ? m.minutes_to_ready : m.minutes_to_ready_from_cold;
+    const on = new Date(target.getTime() - minutes * 60000);
+    advice = on.getTime() <= Date.now()
+      ? t("machine.switch_on_now", { at })
+      : t("machine.switch_on_at", { at, on: fmt.time(on.getTime() / 1000), minutes });
+  }
+  return `<div class="row small muted" style="margin-top:12px;gap:8px"><label class="row" style="gap:6px">${t("machine.coffee_at")} <input type="time" id="coffee-at" value="${at}" style="width:auto"></label>${advice ? `<span class="pill">${advice}</span>` : `<span class="faint">${t("machine.from_cold", { minutes: m.minutes_to_ready_from_cold })}</span>`}</div>`;
+}
+
 /** The modes a person can switch to from here; grind is the grinder's business. */
 const MODES = ["standby", "brew", "steam", "water"];
 
@@ -63,7 +99,9 @@ export async function renderNow(view) {
             <dt>${t("machine.heating_for")}</dt><dd class="num">${fmt.duration(m.heating_for_s)}</dd>
             <dt>${t("machine.heatup")}</dt><dd class="num">${fmt.duration(m.heatup_s)}</dd>
             <dt>${t("machine.powered_for")}</dt><dd class="num">${fmt.duration(m.powered_for_s)}</dd>
+            <dt>${t("machine.ready_in")}</dt><dd class="num">${readyIn(m)}</dd>
           </dl>
+          ${planner(m)}
           <div class="seg" style="margin-top:18px" role="group" aria-label="${t("machine.control")}">
             ${MODES.map((mode) => `<button type="button" data-mode="${mode}" class="${m.reachable && m.mode_name === mode ? "active" : ""}" ${m.reachable ? "" : "disabled"}>${t("machine.mode." + mode)}</button>`).join("")}
           </div>
@@ -105,6 +143,12 @@ export async function renderNow(view) {
           </a>` : `<p class="empty">${t("now.none")}</p>`}
       </section>`;
   };
+  let latest = null;
+  view.addEventListener("change", (e) => {
+    if (e.target.id !== "coffee-at") return;
+    try { localStorage.setItem(PLAN_KEY, e.target.value); } catch {}
+    if (latest) draw(latest);
+  });
   // One handler on the view, since draw() replaces the buttons on every poll.
   view.addEventListener("click", async (e) => {
     const button = e.target.closest("[data-mode]");
@@ -118,8 +162,9 @@ export async function renderNow(view) {
     }
     draw(await api.now());
   });
-  draw(await api.now());
-  const onLive = (e) => draw(e.detail);
+  const drawLatest = (now) => { latest = now; draw(now); };
+  drawLatest(await api.now());
+  const onLive = (e) => drawLatest(e.detail);
   document.addEventListener("live", onLive);
   return () => document.removeEventListener("live", onLive);
 }

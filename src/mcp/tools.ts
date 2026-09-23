@@ -421,7 +421,7 @@ const TOOLS: Tool[] = [
  * against the same database handle the caller owns.
  */
 export function createMcpServer(db: DatabaseSync): Server {
-const server = new Server({ name: "barista-memory", version: "0.4.2" }, { capabilities: { tools: {} } });
+const server = new Server({ name: "barista-memory", version: "0.4.3" }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 

@@ -362,5 +362,11 @@
   "dialin.start": "Začni na mletí {grind} a dávce {dose} g.",
   "dialin.source.coffee": "(z historie této kávy)",
   "dialin.source.roaster": "(podle {coffee} od stejné pražírny)",
-  "dialin.source.global": "(podle {coffee}, poslední mletí)"
+  "dialin.source.global": "(podle {coffee}, poslední mletí)",
+  "machine.ready_in": "připraveno za",
+  "machine.ready_now": "teď",
+  "machine.coffee_at": "Káva v",
+  "machine.switch_on_at": "zapnout v {on} (~{minutes} min)",
+  "machine.switch_on_now": "na {at} zapnout hned",
+  "machine.from_cold": "od studena ~{minutes} min"
 }

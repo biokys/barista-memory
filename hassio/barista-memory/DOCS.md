@@ -35,9 +35,39 @@ add-on gets the broker from the Supervisor and Home Assistant discovers a
   between standby, brew, steam and hot water
 - **Machine on**, **Last shot** (with bean, ratio, weight and rating as
   attributes), **Maintenance due** and **Shots since backflush**
+- **Minutes to ready** — how long the warm-up model says the machine needs
+  from its current state, with `from_cold_min` as an attribute
+- **Coffee remaining** (g), **Coffee days left** and **Coffee running low**,
+  from the bag weight on the coffee and the doses pulled since it was opened
 
 A notification when the machine is ready is then one automation: trigger on
 `binary_sensor.barista_memory_ready` turning on, action "notify".
+
+### Switching on in time
+
+The from-cold estimate lets an automation switch the machine on so that it
+is ready when you want the coffee, not an hour early. With a smart plug and
+an `input_datetime.coffee_time` helper:
+
+```yaml
+triggers:
+  - trigger: template
+    value_template: >-
+      {{ now() >= today_at(states('input_datetime.coffee_time'))
+         - timedelta(minutes=state_attr('sensor.barista_memory_minutes_to_ready', 'from_cold_min') | int(45)) }}
+conditions:
+  - condition: state
+    entity_id: binary_sensor.barista_memory_on
+    state: "off"
+actions:
+  - action: switch.turn_on
+    target:
+      entity_id: switch.espresso_plug
+```
+
+A machine left powered in standby is woken the same way with the mode
+select instead of the plug: `select.select_option` on
+`select.barista_memory_mode_select` with option `brew`.
 
 Another broker can be set under Configuration instead.
 
