@@ -111,6 +111,10 @@ function seedMaintenanceTypes(db: DatabaseSync): void {
  */
 export function openDatabase(path: string): DatabaseSync {
   const db = new DatabaseSync(path);
+  // Two processes (daemon, web) open the same file and both apply the schema
+  // at start; without a busy timeout the second one dies on "database is
+  // locked" while the first is still writing (seen on the Pi on 2026-09-23).
+  db.exec("PRAGMA busy_timeout = 5000");
   const { user_version: current } = db.prepare("PRAGMA user_version").get() as { user_version: number };
 
   if (current < SCHEMA_VERSION) {
