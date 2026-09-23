@@ -287,5 +287,7 @@
   "transfer.import": "Upload and replace",
   "transfer.confirm": "Replace this whole archive with “{name}”? This cannot be undone.",
   "transfer.done": "Done, archive replaced ({shots} shots). Reloading…",
-  "transfer.failed": "Import failed."
+  "transfer.failed": "Import failed.",
+  "shot.missing_title": "Shot #{id} is not in the archive",
+  "shot.missing_hint": "Either it never existed, or it was a backflush, which does not count as a coffee."
 }

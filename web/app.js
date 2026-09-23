@@ -44,14 +44,18 @@ async function navigate() {
     const m = hash.match(r.path);
     if (!m) continue;
     renderNav(r.nav);
-    view.innerHTML = "";
-    view.classList.remove("fade"); void view.offsetWidth; view.classList.add("fade");
+    // The old content stays until the new view has its data and replaces it:
+    // an empty frame in between made the page collapse and the scrollbar
+    // flash on every navigation.
+    view.classList.add("loading");
     try {
       cleanup = (await r.view(view, m.slice(1))) || null;
     } catch (error) {
       view.innerHTML = `<div class="card"><p class="muted">${t("error.generic")}</p><p class="faint small">${String(error.message || error)}</p></div>`;
       console.error(error);
     }
+    view.classList.remove("loading");
+    view.classList.remove("fade"); void view.offsetWidth; view.classList.add("fade");
     window.scrollTo({ top: 0 });
     return;
   }

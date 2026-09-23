@@ -12,7 +12,18 @@ function declineEnd(shot) {
 }
 
 export async function renderShot(view, [id]) {
-  const data = await api.shot(id);
+  let data;
+  try {
+    data = await api.shot(id);
+  } catch (err) {
+    view.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px 24px">
+        <h1>${t("shot.missing_title", { id })}</h1>
+        <p class="muted" style="margin-top:8px">${t("shot.missing_hint")}</p>
+        <p style="margin-top:20px"><a class="btn" href="#/shots">${t("nav.history")}</a></p>
+      </div>`;
+    return;
+  }
   const { context: c, machine: m, shot } = data;
   const readiness = m?.settledness == null ? null : m.settledness >= 85 ? "ok" : m.settledness >= 60 ? "warn" : "bad";
   const peak = shot?.summary?.pressure?.max_bar;

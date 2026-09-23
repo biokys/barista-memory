@@ -287,5 +287,7 @@
   "transfer.import": "Nahrát a nahradit",
   "transfer.confirm": "Nahradit celý zdejší archiv souborem „{name}“? Tohle nejde vrátit.",
   "transfer.done": "Hotovo, archiv nahrazen ({shots} shotů). Načítám znovu…",
-  "transfer.failed": "Import se nepovedl."
+  "transfer.failed": "Import se nepovedl.",
+  "shot.missing_title": "Shot #{id} v archivu není",
+  "shot.missing_hint": "Buď nikdy nevznikl, nebo to byl proplach, který se do historie káv nepočítá."
 }

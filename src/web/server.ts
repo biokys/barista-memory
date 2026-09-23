@@ -240,9 +240,11 @@ route("GET", "/api/printer/status", async (_req, res) => {
 route("GET", "/api/shots/:id", async (_req, res, p) => {
   const loaded = loadArchivedShot(db, Number(p.id), true);
   if (!loaded) return json(res, 404, { error: "SHOT_NOT_FOUND" });
-  // Neighbours, for the previous/next links and the default comparison.
-  const prev = db.prepare("SELECT id FROM shots WHERE started_at < (SELECT started_at FROM shots WHERE id = ?) ORDER BY started_at DESC LIMIT 1").get(Number(p.id)) as any;
-  const next = db.prepare("SELECT id FROM shots WHERE started_at > (SELECT started_at FROM shots WHERE id = ?) ORDER BY started_at ASC LIMIT 1").get(Number(p.id)) as any;
+  // Neighbours, for the previous/next links and the default comparison —
+  // from shot_context, so a flush archived between two coffees is skipped
+  // instead of leading to a "not found" page.
+  const prev = db.prepare("SELECT id FROM shot_context WHERE started_at < (SELECT started_at FROM shots WHERE id = ?) ORDER BY started_at DESC LIMIT 1").get(Number(p.id)) as any;
+  const next = db.prepare("SELECT id FROM shot_context WHERE started_at > (SELECT started_at FROM shots WHERE id = ?) ORDER BY started_at ASC LIMIT 1").get(Number(p.id)) as any;
   json(res, 200, { ...loaded, era: eraOf(db, loaded.context.started_at), prev_id: prev?.id ?? null, next_id: next?.id ?? null });
 });
 

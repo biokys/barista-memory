@@ -55,11 +55,14 @@ export function importArchive(db: DatabaseSync, bytes: Uint8Array): ImportResult
     try {
       db.exec("BEGIN");
       for (const table of TABLES) {
-        db.exec(`DELETE FROM main.${table}`);
+        // Settings belong to the installation (printer address, web URL, café
+        // name typed in here), so the file only fills in what is missing.
+        const keepOwn = table === "settings";
+        if (!keepOwn) db.exec(`DELETE FROM main.${table}`);
         const columns = (db.prepare(`PRAGMA main.table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name);
         const theirs = new Set((db.prepare(`PRAGMA imp.table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name));
         const shared = columns.filter((c) => theirs.has(c)).join(", ");
-        db.exec(`INSERT INTO main.${table} (${shared}) SELECT ${shared} FROM imp.${table}`);
+        db.exec(`INSERT ${keepOwn ? "OR IGNORE " : ""}INTO main.${table} (${shared}) SELECT ${shared} FROM imp.${table}`);
         counts[table] = (db.prepare(`SELECT COUNT(*) AS n FROM main.${table}`).get() as { n: number }).n;
       }
       db.exec("COMMIT");
