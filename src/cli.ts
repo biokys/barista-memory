@@ -16,6 +16,7 @@ import { recordEvent, listEvents } from "./events.js";
 import { maintenanceStatus, logMaintenance } from "./maintenance.js";
 import { changeMode } from "./machineControl.js";
 import { printShot, printTest, printerStatus, findPrinters } from "./printer/index.js";
+import { closeBus } from "./printer/bluez.js";
 import { currentConditions } from "./machineState.js";
 
 function parseArgs(argv: string[]): Record<string, string> {
@@ -337,4 +338,8 @@ try {
   }
 } finally {
   db.close();
+  // The printer commands leave a D-Bus connection open, and an open one
+  // keeps the process from exiting (a printer-status hung for minutes on
+  // the Pi after it had printed its answer).
+  closeBus();
 }

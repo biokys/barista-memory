@@ -32,6 +32,13 @@ function systemBus() {
   return bus;
 }
 
+/** Drop the D-Bus connection; an open one keeps a one-shot process alive. */
+export function closeBus(): void {
+  if (!bus) return;
+  try { bus.disconnect(); } catch { /* already gone */ }
+  bus = null;
+}
+
 async function managedObjects(): Promise<ManagedObjects> {
   const root = await systemBus().getProxyObject(BLUEZ, "/");
   const om = root.getInterface("org.freedesktop.DBus.ObjectManager");
@@ -138,6 +145,22 @@ function describe(dev: Record<string, Variant> | null): string {
   return ` [AddressType=${dev.AddressType?.value} RSSI=${dev.RSSI?.value ?? "?"} Connected=${dev.Connected?.value} Paired=${dev.Paired?.value} Name=${dev.Name?.value ?? "?"}]`;
 }
 
+/**
+ * What BlueZ build we are talking to, for the log. ExperimentalFeatures is
+ * only present when bluetoothd runs with -E (Home Assistant OS does, the Pi
+ * does not), which is the one known difference between the host where the
+ * printer connects and the one where Connect() never answers.
+ */
+async function describeStack(adapter: string): Promise<string> {
+  try {
+    const objects = await managedObjects();
+    const experimental = objects[adapter]?.["org.bluez.Adapter1"]?.ExperimentalFeatures?.value as string[] | undefined;
+    return ` [experimental=${experimental ? experimental.length : "no"}]`;
+  } catch {
+    return "";
+  }
+}
+
 export async function connect(address: string, attempts = CONNECT_ATTEMPTS): Promise<Connection> {
   const adapter = await adapterPath();
   const path = devicePath(adapter, address);
@@ -150,12 +173,38 @@ export async function connect(address: string, attempts = CONNECT_ATTEMPTS): Pro
       const obj = await systemBus().getProxyObject(BLUEZ, path);
       const device = obj.getInterface("org.bluez.Device1");
       const props = obj.getInterface("org.freedesktop.DBus.Properties");
+      // A timeline of what the device object did while Connect() was
+      // pending. On Home Assistant OS Connect() neither succeeds nor fails
+      // within 45 s; whether the link ever came up is what tells a radio
+      // problem from a BlueZ one, and the log is the only place to see it.
+      const started = Date.now();
+      const timeline: string[] = [];
+      const note = (what: string) => timeline.push(`+${((Date.now() - started) / 1000).toFixed(1)}s ${what}`);
+      let servicesResolved!: () => void;
+      const whenResolved = new Promise<void>((resolve) => { servicesResolved = resolve; });
+      const onChange = (iface: string, changed: Record<string, Variant>) => {
+        if (iface !== "org.bluez.Device1") return;
+        for (const key of ["Connected", "ServicesResolved"]) if (changed[key]) note(`${key}=${changed[key].value}`);
+        if (changed.ServicesResolved?.value === true) servicesResolved();
+      };
+      props.on("PropertiesChanged", onChange);
       try {
-        await withTimeout(connectOverLe(obj, device, props), CONNECT_TIMEOUT_MS, "connect");
+        // BlueZ answers Connect() only after it has browsed the GATT
+        // database; if ServicesResolved arrives first the device is usable,
+        // whatever BlueZ still owes us. The late reply must not surface as
+        // an unhandled rejection.
+        const reply = connectOverLe(obj, device, props, note);
+        reply.catch(() => {});
+        await withTimeout(Promise.race([reply, whenResolved]), CONNECT_TIMEOUT_MS, "connect");
       } catch (error) {
+        // Cancel the pending request, or the next attempt gets InProgress.
+        device.Disconnect().catch(() => {});
         // What the scan saw, for the log: address type and signal are what
         // usually explain an LE connection that never completes.
-        throw new Error(`${error instanceof Error ? error.message : error}${describe(seen)}`);
+        const events = timeline.length ? ` events: ${timeline.join(", ")}` : " events: none";
+        throw new Error(`${error instanceof Error ? error.message : error}${describe(seen)}${await describeStack(adapter)}${events}`);
+      } finally {
+        props.removeListener("PropertiesChanged", onChange);
       }
       await waitForProperty(props, "org.bluez.Device1", "ServicesResolved", true, RESOLVE_TIMEOUT_MS);
       return connection(path, obj);
@@ -176,16 +225,23 @@ export async function connect(address: string, attempts = CONNECT_ATTEMPTS): Pro
  * interface, or the PreferredBearer property where only that exists, pins
  * the attempt to LE; older BlueZ has neither and Connect() is right there.
  */
-async function connectOverLe(obj: ProxyObject, device: ClientInterface, props: ClientInterface): Promise<void> {
+async function connectOverLe(obj: ProxyObject, device: ClientInterface, props: ClientInterface, note: (what: string) => void): Promise<void> {
   const ifaces = Object.keys(obj.interfaces);
   if (ifaces.includes("org.bluez.Bearer.LE1")) {
+    note("Bearer.LE1.Connect()");
     await obj.getInterface("org.bluez.Bearer.LE1").Connect();
+    note("Bearer.LE1.Connect() returned");
     return;
   }
+  let preferred = "PreferredBearer=le";
   try {
     await props.Set("org.bluez.Device1", "PreferredBearer", new Variant("s", "le"));
-  } catch { /* property absent on this BlueZ */ }
+  } catch {
+    preferred = "no PreferredBearer";
+  }
+  note(`Device1.Connect() (${preferred})`);
   await device.Connect();
+  note("Device1.Connect() returned");
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
