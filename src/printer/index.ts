@@ -85,7 +85,10 @@ async function printReceipt(db: DatabaseSync, receipt: Receipt): Promise<PrintRe
     const result = await withPrinter(settings.mac, (p) => p.print(rows, receipt.raster.height, settings.intensity));
     return { ok: true, ...result };
   } catch (error) {
-    return { ok: false, code: "PRINT_FAILED", message: error instanceof Error ? error.message : String(error) };
+    const message = error instanceof Error ? error.message : String(error);
+    // Into the service log too: an add-on user sees that, not the API reply.
+    console.error(`printer: ${settings.mac}: ${message}`);
+    return { ok: false, code: "PRINT_FAILED", message };
   } finally {
     busy = false;
   }
@@ -110,7 +113,9 @@ export async function printerStatus(db: DatabaseSync): Promise<{ ok: true; statu
   try {
     return { ok: true, status: await withPrinter(settings.mac, (p) => p.status()) };
   } catch (error) {
-    return { ok: false, code: "UNREACHABLE", message: error instanceof Error ? error.message : String(error) };
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`printer: ${settings.mac}: ${message}`);
+    return { ok: false, code: "UNREACHABLE", message };
   } finally {
     busy = false;
   }

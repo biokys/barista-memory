@@ -44,6 +44,7 @@ export const api = {
   updatePrinter: (change) => call("PATCH", "api/printer", change),
   scanPrinters: () => call("POST", "api/printer/scan"),
   testPrint: () => call("POST", "api/printer/test"),
+  printerStatus: () => call("GET", "api/printer/status"),
   printShot: (id) => call("POST", `api/shots/${id}/print`),
   maintenanceDone: (key, body = {}) => call("POST", `api/maintenance/${key}`, body),
   lastFlushWasCafiza: () => call("POST", "api/maintenance/last-flush/cafiza"),

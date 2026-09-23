@@ -289,5 +289,10 @@
   "transfer.done": "Hotovo, archiv nahrazen ({shots} shotů). Načítám znovu…",
   "transfer.failed": "Import se nepovedl.",
   "shot.missing_title": "Shot #{id} v archivu není",
-  "shot.missing_hint": "Buď nikdy nevznikl, nebo to byl proplach, který se do historie káv nepočítá."
+  "shot.missing_hint": "Buď nikdy nevznikl, nebo to byl proplach, který se do historie káv nepočítá.",
+  "printer.status": "Stav tiskárny",
+  "printer.checking": "Zjišťuji…",
+  "printer.status_line": "Tiskárna odpovídá: baterie {battery} %, {ready}.",
+  "printer.ready": "připravena",
+  "printer.not_ready": "není připravena (papír? víko?)"
 }

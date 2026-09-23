@@ -22,7 +22,7 @@ export async function renderSettings(view) {
       <div class="cols">
         <div class="col">
         <section class="card">
-          <div class="card-head"><h2>${t("printer.title")}</h2>${ps?.mac ? `<button class="btn sm ghost" id="printer-test">${t("printer.test")}</button>` : ""}</div>
+          <div class="card-head"><h2>${t("printer.title")}</h2><span class="row">${ps?.mac ? `<button class="btn sm ghost" id="printer-status">${t("printer.status")}</button><button class="btn sm ghost" id="printer-test">${t("printer.test")}</button>` : ""}</span></div>
           ${printer ? `
             ${printer.bluetooth ? "" : `<p class="muted small">${t("printer.no_bluetooth")}</p>`}
             <div class="form">
@@ -104,6 +104,14 @@ export async function renderSettings(view) {
         });
         toast(t("printer.saved")); load();
       } catch (err) { toast(String(err.message), "bad"); }
+    });
+    view.querySelector("#printer-status")?.addEventListener("click", async (e) => {
+      const button = e.currentTarget; button.disabled = true; button.textContent = t("printer.checking");
+      try {
+        const r = await api.printerStatus();
+        toast(t("printer.status_line", { battery: r.status.battery ?? "?", ready: r.status.ready ? t("printer.ready") : t("printer.not_ready") }));
+      } catch (err) { toast(t("printer.failed") + " " + err.message, "bad"); }
+      button.disabled = false; button.textContent = t("printer.status");
     });
     view.querySelector("#printer-test")?.addEventListener("click", async (e) => {
       const button = e.currentTarget; button.disabled = true;

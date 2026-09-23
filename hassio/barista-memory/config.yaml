@@ -1,5 +1,5 @@
 name: Barista Memory
-version: "0.3.8"
+version: "0.3.9"
 slug: barista_memory
 description: Shot archive and brewing context for a GaggiMate espresso machine
 url: https://github.com/biokys/barista-memory

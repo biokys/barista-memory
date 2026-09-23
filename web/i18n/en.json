@@ -289,5 +289,10 @@
   "transfer.done": "Done, archive replaced ({shots} shots). Reloading…",
   "transfer.failed": "Import failed.",
   "shot.missing_title": "Shot #{id} is not in the archive",
-  "shot.missing_hint": "Either it never existed, or it was a backflush, which does not count as a coffee."
+  "shot.missing_hint": "Either it never existed, or it was a backflush, which does not count as a coffee.",
+  "printer.status": "Printer status",
+  "printer.checking": "Checking…",
+  "printer.status_line": "Printer answers: battery {battery} %, {ready}.",
+  "printer.ready": "ready",
+  "printer.not_ready": "not ready (paper? lid?)"
 }
