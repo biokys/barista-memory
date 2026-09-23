@@ -24,7 +24,7 @@ import { getCoffee } from "../coffees.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "../ingest.js";
 import { powerSessions, currentConditions, MODE_NAMES } from "../machineState.js";
 
-const MCP_VERSION = "0.4.7";
+const MCP_VERSION = "0.4.8";
 
 function ok(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload) }] };
@@ -137,7 +137,7 @@ const TOOLS: Tool[] = [
         name: { type: "string" },
         roaster: { type: "string" },
         origin: { type: "string", description: "Country or region" },
-        process: { type: "string", description: "washed, natural, honey, ..." },
+        process: { type: "string", description: "washed, natural, honey, anaerobic or other (the web picker uses these keys); free text is kept as typed" },
         roast_level: { type: "string", description: "light, medium_light, medium, medium_dark or dark (the web picker uses these keys); free text is kept as typed" },
         bag_g: { type: "number", description: "Weight of the package, for the stock estimate" },
         target_time_min_s: { type: "number" },

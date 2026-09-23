@@ -403,5 +403,10 @@
   "coffees.roast.medium_light": "medium-light",
   "coffees.roast.medium": "medium",
   "coffees.roast.medium_dark": "medium-dark",
-  "coffees.roast.dark": "dark"
+  "coffees.roast.dark": "dark",
+  "coffees.process_of.washed": "washed",
+  "coffees.process_of.natural": "natural",
+  "coffees.process_of.honey": "honey",
+  "coffees.process_of.anaerobic": "anaerobic",
+  "coffees.process_of.other": "other"
 }

@@ -403,5 +403,10 @@
   "coffees.roast.medium_light": "světle střední",
   "coffees.roast.medium": "střední",
   "coffees.roast.medium_dark": "tmavě střední",
-  "coffees.roast.dark": "tmavé"
+  "coffees.roast.dark": "tmavé",
+  "coffees.process_of.washed": "promývaná",
+  "coffees.process_of.natural": "natural",
+  "coffees.process_of.honey": "honey",
+  "coffees.process_of.anaerobic": "anaerobní",
+  "coffees.process_of.other": "jiné"
 }
