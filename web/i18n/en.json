@@ -396,5 +396,7 @@
   "card.grind_skipped": "The grind number is from another grinder and was not taken.",
   "card.profile_written": "Profile written to the machine.",
   "card.profile_failed": "The profile could not be written:",
-  "card.failed": "The card could not be imported."
+  "card.failed": "The card could not be imported.",
+  "shot.avg_flow": "Average flow",
+  "shot.compare_delta": "difference"
 }

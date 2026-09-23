@@ -396,5 +396,7 @@
   "card.grind_skipped": "Číslo mletí je z jiného mlýnku, nepřevzato.",
   "card.profile_written": "Profil zapsán do stroje.",
   "card.profile_failed": "Profil se nepodařilo zapsat:",
-  "card.failed": "Kartu se nepodařilo nahrát."
+  "card.failed": "Kartu se nepodařilo nahrát.",
+  "shot.avg_flow": "Průměrný průtok",
+  "shot.compare_delta": "rozdíl"
 }

@@ -11,6 +11,50 @@ function declineEnd(shot) {
   return inPhase.length ? Math.min(...inPhase) : null;
 }
 
+/**
+ * The two shots' facts side by side — context, cup, curve summary and the
+ * machine's state — with the difference where a number makes one. The
+ * chart shows *that* they differ; this says *in what*.
+ */
+function compareTable(a, b) {
+  const num = (v, d = 1) => (v == null ? null : Number(v.toFixed(d)));
+  const rows = [
+    [t("shot.bean"), (x) => [x.context.bean ? `${x.context.bean}${x.context.roaster ? " · " + x.context.roaster : ""}` : "–"]],
+    [t("shot.profile"), (x) => [x.context.profile_name ?? "–"]],
+    [t("shot.grind"), (x) => [x.context.grind_setting ?? "–", Number(x.context.grind_setting)]],
+    [t("shot.dose"), (x) => [x.context.dose_g != null ? x.context.dose_g + " g" : "–", x.context.dose_g]],
+    [t("shot.cup"), (x) => [fmt.g(x.context.stable_weight_g), num(x.context.stable_weight_g)]],
+    [t("shot.ratio"), (x) => [fmt.ratio(x.context.ratio), num(x.context.ratio, 2)]],
+    [t("shot.time"), (x) => [fmt.seconds(x.context.duration_ms / 1000), num(x.context.duration_ms / 1000)]],
+    [t("shot.preinfusion"), (x) => [x.shot ? x.shot.summary.extraction.preinfusion_time_seconds.toFixed(0) + " s" : "–", x.shot ? num(x.shot.summary.extraction.preinfusion_time_seconds, 0) : null]],
+    [t("shot.temp"), (x) => [x.shot ? fmt.temp(x.shot.summary.temperature.average_celsius) : "–", x.shot ? num(x.shot.summary.temperature.average_celsius) : null]],
+    [t("machine.target"), (x) => [x.shot?.summary.temperature.target_average ? x.shot.summary.temperature.target_average.toFixed(0) + " °C" : "–", x.shot ? num(x.shot.summary.temperature.target_average, 0) : null]],
+    [t("shot.peak"), (x) => [x.shot ? fmt.bar(x.shot.summary.pressure.max_bar) : "–", x.shot ? num(x.shot.summary.pressure.max_bar) : null]],
+    [t("shot.avg_flow"), (x) => [x.shot ? x.shot.summary.flow.average_flow_rate_ml_s.toFixed(2) + " ml/s" : "–", x.shot ? num(x.shot.summary.flow.average_flow_rate_ml_s, 2) : null]],
+    [t("shot.machine"), (x) => [x.machine ? fmt.pct(x.machine.settledness) : "–", x.machine?.settledness ?? null]],
+    [t("machine.heating_for"), (x) => [x.machine ? fmt.duration(x.machine.heating_for_s) : "–", x.machine?.heating_for_s != null ? num(x.machine.heating_for_s / 60, 0) : null]],
+    [t("shot.rating"), (x) => [x.context.rating ? "★".repeat(x.context.rating) : "–", x.context.rating ?? null]],
+    [t("anomaly.title"), (x) => [(x.analysis?.flags || []).map((f) => t("anomaly." + f)).join(", ") || (x.analysis ? t("anomaly.none") : "–")]],
+    [t("dialin.next"), (x) => [verdictText(x.verdict) || "–"]],
+  ];
+  const delta = (va, vb) => {
+    if (va == null || vb == null || !Number.isFinite(va) || !Number.isFinite(vb) || va === vb) return "";
+    const d = va - vb;
+    // No colour: a shorter time or a lower peak is not better or worse by itself.
+    return `${d > 0 ? "+" : "−"}${Math.abs(Math.round(d * 100) / 100)}`;
+  };
+  return `
+    <table class="cmp" style="margin-top:16px">
+      <thead><tr><th></th><th class="r">#${a.context.id}</th><th class="r">#${b.context.id}</th><th class="r">${t("shot.compare_delta")}</th></tr></thead>
+      <tbody>${rows.map(([label, get]) => {
+        const [ta, va] = get(a), [tb, vb] = get(b);
+        const same = ta === tb;
+        // Some labels are lowercase because they sit mid-sentence elsewhere.
+        return `<tr class="${same ? "faint" : ""}"><td>${label.charAt(0).toUpperCase() + label.slice(1)}</td><td class="r num">${ta}</td><td class="r num">${tb}</td><td class="r num">${delta(va, vb)}</td></tr>`;
+      }).join("")}</tbody>
+    </table>`;
+}
+
 export async function renderShot(view, [id]) {
   let data;
   try {
@@ -53,6 +97,7 @@ export async function renderShot(view, [id]) {
       <div class="chart chart-shot" id="chart"></div>
       ${shot ? `<div class="phase-bar" style="margin-top:14px">${phaseBar}</div>
       <div class="row small faint" style="margin-top:6px;gap:18px">${(shot.phases || []).map((p) => `<span>${t("shot.phase." + p.name) || p.name} <b class="num muted">${p.duration_seconds.toFixed(1)} s</b> · ${p.avg_pressure_bar.toFixed(1)} bar · ${p.avg_temperature_c.toFixed(1)}°</span>`).join("")}</div>` : ""}
+      <div id="cmp-table"></div>
     </section>
 
     <div class="grid cols-2">
@@ -104,11 +149,13 @@ export async function renderShot(view, [id]) {
     button.disabled = false;
   };
   const sel = view.querySelector("#cmp");
+  const table = view.querySelector("#cmp-table");
   for (const s of list.shots) if (s.id !== c.id) sel.insertAdjacentHTML("beforeend", `<option value="${s.id}">#${s.id} · ${fmt.date(s.started_at)} · ${fmt.ratio(s.ratio)}</option>`);
   sel.onchange = async () => {
-    if (!sel.value) return draw(null);
+    if (!sel.value) { table.innerHTML = ""; return draw(null); }
     const other = await api.shot(sel.value);
     draw(other.shot);
+    table.innerHTML = compareTable(data, other);
   };
   return () => destroy && destroy();
 }
