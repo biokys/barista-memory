@@ -19,9 +19,12 @@ import { listCoffees, coffeeSummary, createCoffee, updateCoffee } from "../coffe
 import { agingPoints, bags, currentStock } from "../coffeeStats.js";
 import { suggestFor, verdictFor } from "../dialin.js";
 import { getAnalysis } from "../anomaly.js";
+import { exportSetupCard, importSetupCard } from "../setupCard.js";
 import { getCoffee } from "../coffees.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "../ingest.js";
 import { powerSessions, currentConditions, MODE_NAMES } from "../machineState.js";
+
+const MCP_VERSION = "0.4.5";
 
 function ok(payload: unknown) {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload) }] };
@@ -154,6 +157,30 @@ const TOOLS: Tool[] = [
       "ratio ±10 %): on_target | too_fast (grind finer) | too_slow (coarser) | ratio_low | ratio_high | " +
       "no_targets (set them with save_coffee) | no_data. Defaults to the coffee in use.",
     inputSchema: { type: "object", properties: { coffee_id: { type: "number", description: "Default: the current coffee" } } },
+  },
+  {
+    name: "export_setup_card",
+    description:
+      "The current setup as a shareable card: the coffee with its targets, grinder name, grind, dose, basket, " +
+      "what its shots averaged, and the profile selected on the machine (whole). Another barista-memory imports it with import_setup_card.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "import_setup_card",
+    description:
+      "Take in a setup card: creates the coffee if unknown (an existing one keeps its own details) and opens a " +
+      "period with its dose and basket. The grind number is taken only when the card names the same grinder as " +
+      "this archive's `grinder` preference, or take_grind is true. The profile is written to the machine only " +
+      "with write_profile true — it changes the machine.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        card: { type: "object", description: "The card, as exported" },
+        write_profile: { type: "boolean", description: "Default false" },
+        take_grind: { type: "boolean", description: "Default false" },
+      },
+      required: ["card"],
+    },
   },
   {
     name: "record_event",
@@ -422,7 +449,7 @@ const TOOLS: Tool[] = [
  * against the same database handle the caller owns.
  */
 export function createMcpServer(db: DatabaseSync): Server {
-const server = new Server({ name: "barista-memory", version: "0.4.4" }, { capabilities: { tools: {} } });
+const server = new Server({ name: "barista-memory", version: MCP_VERSION }, { capabilities: { tools: {} } });
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
 
@@ -462,6 +489,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const setup = updateSetup(db, setup_id as number, change);
         if (!setup) return fail(`No setup with id ${setup_id}`, "SETUP_NOT_FOUND");
         return ok({ setup, message: "Setup corrected; shots in that period re-derive their context" });
+      }
+
+      case "export_setup_card": {
+        const result = await exportSetupCard(db, MCP_VERSION);
+        return result.ok ? ok(result.card) : fail(result.message, result.code);
+      }
+
+      case "import_setup_card": {
+        try {
+          return ok(await importSetupCard(db, args!.card, { write_profile: args?.write_profile === true, take_grind: args?.take_grind === true }));
+        } catch (error) {
+          return fail(error instanceof Error ? error.message : String(error), "INVALID");
+        }
       }
 
       case "dial_in": {

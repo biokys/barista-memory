@@ -28,9 +28,19 @@ type ManagedObjects = Record<string, Record<string, Record<string, Variant>>>;
 
 let bus: ReturnType<typeof dbus.systemBus> | null = null;
 function systemBus() {
-  if (!bus) bus = dbus.systemBus();
+  if (!bus) {
+    bus = dbus.systemBus();
+    // Without a listener, a failed connect (no /run/dbus in the container,
+    // no system bus on a Mac) is an unhandled 'error' event that took the
+    // whole web process down when the Settings page asked about the
+    // printer. Drop the bus so the next call tries again.
+    bus.on("error", () => { bus = null; });
+  }
   return bus;
 }
+
+/** A request over a bus that never connected does not fail; it waits forever. */
+const BUS_CALL_TIMEOUT_MS = 5000;
 
 /** Drop the D-Bus connection; an open one keeps a one-shot process alive. */
 export function closeBus(): void {
@@ -40,9 +50,9 @@ export function closeBus(): void {
 }
 
 async function managedObjects(): Promise<ManagedObjects> {
-  const root = await systemBus().getProxyObject(BLUEZ, "/");
+  const root = await withTimeout(systemBus().getProxyObject(BLUEZ, "/"), BUS_CALL_TIMEOUT_MS, "D-Bus");
   const om = root.getInterface("org.freedesktop.DBus.ObjectManager");
-  return (await om.GetManagedObjects()) as ManagedObjects;
+  return (await withTimeout(om.GetManagedObjects(), BUS_CALL_TIMEOUT_MS, "D-Bus")) as ManagedObjects;
 }
 
 async function adapterPath(): Promise<string> {

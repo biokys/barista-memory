@@ -23,6 +23,8 @@ import { listCoffees, coffeeSummary, createCoffee, updateCoffee } from "../coffe
 import { agingPoints, bags, currentStock, stockWarnG } from "../coffeeStats.js";
 import { suggestFor, verdictFor } from "../dialin.js";
 import { getAnalysis, analysesFor } from "../anomaly.js";
+import { exportSetupCard, importSetupCard } from "../setupCard.js";
+import { getSetting } from "../settings.js";
 import { setSetting } from "../settings.js";
 import { loadArchivedShot, pressureSparkline } from "../shots.js";
 import { saveProfileMerged, selectProfileOnMachine } from "../profiles.js";
@@ -339,18 +341,42 @@ route("GET", "/api/coffees/:id/suggestion", async (_req, res, p) => {
   json(res, 200, { suggestion: suggestFor(db, Number(p.id)) });
 });
 
-route("GET", "/api/stock", async (_req, res) => {
-  json(res, 200, { stock: currentStock(db), warn_g: stockWarnG(db) });
+// Small preferences the UI keeps in the settings table: the grinder's name
+// (a grind number means nothing without it) and the low-stock threshold.
+function preferences() {
+  return { grinder: getSetting(db, "grinder", ""), stock_warn_g: stockWarnG(db), stock: currentStock(db) };
+}
+
+route("GET", "/api/preferences", async (_req, res) => {
+  json(res, 200, preferences());
 });
 
-route("PATCH", "/api/stock", async (req, res) => {
+route("PATCH", "/api/preferences", async (req, res) => {
   const body = await readJson(req);
-  if (body.warn_g !== undefined) {
-    const n = Number(body.warn_g);
-    if (!Number.isFinite(n) || n < 0) return json(res, 400, { error: "INVALID", message: "warn_g must be a number ≥ 0" });
+  if (body.stock_warn_g !== undefined) {
+    const n = Number(body.stock_warn_g);
+    if (!Number.isFinite(n) || n < 0) return json(res, 400, { error: "INVALID", message: "stock_warn_g must be a number ≥ 0" });
     setSetting(db, "stock_warn_g", String(n));
   }
-  json(res, 200, { stock: currentStock(db), warn_g: stockWarnG(db) });
+  if (body.grinder !== undefined) setSetting(db, "grinder", String(body.grinder).trim() || null);
+  json(res, 200, preferences());
+});
+
+route("GET", "/api/setup-card", async (_req, res) => {
+  const result = await exportSetupCard(db, VERSION.version);
+  if (!result.ok) return json(res, 404, { error: result.code, message: result.message });
+  const name = `${result.card.coffee.name}${result.card.coffee.roaster ? " - " + result.card.coffee.roaster : ""}`.replace(/[^\w\d .-]+/g, "_");
+  res.writeHead(200, { "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="setup ${name}.json"` });
+  res.end(JSON.stringify(result.card, null, 2));
+});
+
+route("POST", "/api/setup-card", async (req, res) => {
+  const body = await readJson(req);
+  try {
+    json(res, 200, await importSetupCard(db, body.card, { write_profile: body.write_profile === true, take_grind: body.take_grind === true }));
+  } catch (error) {
+    json(res, 400, { error: "INVALID", message: error instanceof Error ? error.message : String(error) });
+  }
 });
 
 route("POST", "/api/coffees", async (req, res) => {

@@ -12,7 +12,7 @@ export async function renderSettings(view) {
     const [printer, latest, stock] = await Promise.all([
       api.printer().catch(() => null),
       api.shots({ limit: 1 }).catch(() => ({ shots: [] })),
-      api.stock().catch(() => null),
+      api.preferences().catch(() => null),
     ]);
     const ps = printer?.settings;
     const rc = ps?.receipt;
@@ -66,18 +66,39 @@ export async function renderSettings(view) {
         </div>
       </div>
       ${stock ? `<section class="card">
-        <div class="card-head"><h2>${t("stock.title")}</h2></div>
-        <p class="muted small" style="max-width:70ch">${t("stock.hint")}</p>
-        <div class="row" style="margin-top:10px"><label class="row">${t("stock.warn_g")} <input type="number" id="stock-warn" min="0" step="10" value="${stock.warn_g}" style="width:6em"> g</label><button class="btn sm" id="stock-save">${t("printer.save")}</button></div>
+        <div class="card-head"><h2>${t("prefs.title")}</h2></div>
+        <div class="grid cols-2">
+          <div class="field"><label>${t("prefs.grinder")}</label><input id="pref-grinder" value="${stock.grinder ?? ""}" placeholder="DF64"><p class="faint small">${t("prefs.grinder_hint")}</p></div>
+          <div class="field"><label>${t("stock.warn_g")} (g)</label><input type="number" id="stock-warn" min="0" step="10" value="${stock.stock_warn_g}"><p class="faint small">${t("stock.hint")}</p></div>
+        </div>
+        <div class="row" style="margin-top:6px"><button class="btn sm" id="pref-save">${t("printer.save")}</button></div>
+      </section>
+      <section class="card">
+        <div class="card-head"><h2>${t("card.title")}</h2><a class="btn sm ghost" href="api/setup-card" download>${t("card.export")}</a></div>
+        <p class="muted small" style="max-width:70ch">${t("card.hint")}</p>
+        <div class="row" style="margin-top:10px;flex-wrap:wrap"><input type="file" id="card-file" accept=".json,application/json"><label class="row small"><input type="checkbox" id="card-profile"> ${t("card.write_profile")}</label><label class="row small"><input type="checkbox" id="card-grind"> ${t("card.take_grind")}</label><button class="btn sm" id="card-go">${t("card.import")}</button></div>
       </section>` : ""}
       <section class="card">
         <div class="card-head"><h2>${t("transfer.title")}</h2><a class="btn sm ghost" href="api/export">${t("transfer.export")}</a></div>
         <p class="muted small" style="max-width:70ch">${t("transfer.hint")}</p>
         <div class="row" style="margin-top:10px"><input type="file" id="import-file" accept=".db,application/vnd.sqlite3,application/octet-stream"><button class="btn sm" id="import-go">${t("transfer.import")}</button></div>
       </section>`;
-    view.querySelector("#stock-save")?.addEventListener("click", async () => {
-      await api.updateStock({ warn_g: Number(view.querySelector("#stock-warn").value) });
+    view.querySelector("#pref-save")?.addEventListener("click", async () => {
+      await api.updatePreferences({ grinder: view.querySelector("#pref-grinder").value, stock_warn_g: Number(view.querySelector("#stock-warn").value) });
       toast(t("stock.saved"));
+    });
+    view.querySelector("#card-go")?.addEventListener("click", async (e) => {
+      const file = view.querySelector("#card-file").files[0];
+      if (!file) return;
+      const button = e.currentTarget; button.disabled = true;
+      try {
+        const card = JSON.parse(await file.text());
+        const r = await api.importSetupCard(card, { write_profile: view.querySelector("#card-profile").checked, take_grind: view.querySelector("#card-grind").checked });
+        toast(t("card.done", { name: r.coffee.name }) + (r.grind_skipped ? " " + t("card.grind_skipped") : "") + (r.profile === "written" ? " " + t("card.profile_written") : r.profile === "failed" ? " " + t("card.profile_failed") + " " + (r.profile_message || "") : ""), r.profile === "failed" ? "bad" : undefined);
+      } catch (err) {
+        toast(t("card.failed") + " " + err.message, "bad");
+      }
+      button.disabled = false;
     });
     view.querySelector("#import-go")?.addEventListener("click", async (e) => {
       const file = view.querySelector("#import-file").files[0];

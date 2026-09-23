@@ -133,6 +133,22 @@ time for a coffee at 7:30), and how much of the current bag is left.
 add-on takes the Mosquitto add-on's credentials from the Supervisor, so
 there nothing needs configuring.
 
+### Coffees, dial-in, stock and sharing a setup
+
+Each coffee is a row of its own (name and roaster as identity, with origin,
+process, roast level, bag weight and the targets the dial-in aims for), and
+a grind period points at one. The coffee page shows how it ages (days since
+roast against time and ratio, per grind), how much of the bag is left and
+when it runs out, and where to start it next time; every shot gets a
+rule-based verdict against the coffee's targets (finer, coarser, stop
+earlier) on the Now page, in its facts and on the receipt. The curve itself
+is checked for channeling, a choked puck, low pressure and an unstable
+temperature, and compared with the earlier shots pulled the same way. A
+setup — coffee, grind with the grinder's name, dose, basket and the
+machine's profile — downloads as one JSON card from Settings that another
+barista-memory imports; the profile is written to the machine only on
+request.
+
 ### Receipt printer
 
 A Bluetooth thermal printer of the MXW01 family ("cat printer", 384 dots
