@@ -179,7 +179,9 @@ export function machineChart(container, samples, shots, sessions, events = []) {
       { value: "{HH}:{mm}" },
       { label: "°C", stroke: c.temp, width: 2, spanGaps: false, value: (u, v) => (v == null ? "–" : v.toFixed(1)) },
       { label: "target", stroke: c.faint, width: 1, dash: [3, 4], spanGaps: false, value: (u, v) => (v == null ? "–" : v) },
-      { label: "body", stroke: c.accent, width: 1.5, dash: [6, 4], spanGaps: true, value: (u, v) => (v == null ? "–" : v.toFixed(1)) },
+      // No point markers: the body temperature is a model evaluated at the
+      // sample times, not a measurement, and dots would say otherwise.
+      { label: "body", stroke: c.accent, width: 1.5, dash: [6, 4], spanGaps: true, points: { show: false }, value: (u, v) => (v == null ? "–" : v.toFixed(1)) },
       { label: "warm-up", show: false, scale: "pct" },
     ],
     hooks: {
