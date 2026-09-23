@@ -151,7 +151,7 @@ export async function connect(address: string, attempts = CONNECT_ATTEMPTS): Pro
       const device = obj.getInterface("org.bluez.Device1");
       const props = obj.getInterface("org.freedesktop.DBus.Properties");
       try {
-        await withTimeout(device.Connect(), CONNECT_TIMEOUT_MS, "connect");
+        await withTimeout(connectOverLe(obj, device, props), CONNECT_TIMEOUT_MS, "connect");
       } catch (error) {
         // What the scan saw, for the log: address type and signal are what
         // usually explain an LE connection that never completes.
@@ -165,6 +165,27 @@ export async function connect(address: string, attempts = CONNECT_ATTEMPTS): Pro
     }
   }
   throw new Error(`could not connect to ${address}: ${lastError instanceof Error ? lastError.message : lastError}`);
+}
+
+/**
+ * Connect over LE explicitly. The MXW01 advertises flags that claim BR/EDR
+ * support it does not have, and BlueZ 5.80+ answers Device1.Connect() on such
+ * a "dual-mode" device by trying classic Bluetooth first — which never
+ * completes (seen on Home Assistant OS, BlueZ 5.8x, 2026-09-23; BlueZ 5.66
+ * on the Pi has no such logic and connected at once). The per-bearer
+ * interface, or the PreferredBearer property where only that exists, pins
+ * the attempt to LE; older BlueZ has neither and Connect() is right there.
+ */
+async function connectOverLe(obj: ProxyObject, device: ClientInterface, props: ClientInterface): Promise<void> {
+  const ifaces = Object.keys(obj.interfaces);
+  if (ifaces.includes("org.bluez.Bearer.LE1")) {
+    await obj.getInterface("org.bluez.Bearer.LE1").Connect();
+    return;
+  }
+  try {
+    await props.Set("org.bluez.Device1", "PreferredBearer", new Variant("s", "le"));
+  } catch { /* property absent on this BlueZ */ }
+  await device.Connect();
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
