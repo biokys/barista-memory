@@ -256,7 +256,10 @@ td.r, th.r { text-align: right; }
 .phase-bar i:nth-child(1) { background: #4d6b8a; } .phase-bar i:nth-child(2) { background: #5c7b57; }
 .phase-bar i:nth-child(3) { background: #8a6a3a; } .phase-bar i:nth-child(4) { background: var(--accent); }
 .phase-bar i:nth-child(5) { background: #a06a4e; }
-.fade { animation: fade .3s ease; } @keyframes fade { from { opacity: 0; transform: translateY(4px); } }
+/* The view slides in from above, not from below: a transform downwards extends
+   the document's scrollable area by those pixels for the length of the
+   animation, and the scrollbar appeared and vanished on every page turn. */
+.fade { animation: fade .3s ease; } @keyframes fade { from { opacity: 0; transform: translateY(-4px); } }
 
 /* Selects everywhere: our own chevron with room around it, instead of the
    native one glued to the right edge. Every other rule that colours a select
