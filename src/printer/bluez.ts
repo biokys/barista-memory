@@ -104,9 +104,19 @@ function devicePath(adapter: string, address: string): string {
  * after twenty seconds; a cat printer that went to sleep is exactly that.
  * RSSI is only present on a device while its advertisements arrive.
  */
-async function waitForAdvertising(adapter: string, path: string, ms: number): Promise<boolean> {
+async function waitForAdvertising(adapter: string, path: string, ms: number): Promise<Record<string, Variant> | null> {
   const obj = await systemBus().getProxyObject(BLUEZ, adapter);
   const a = obj.getInterface("org.bluez.Adapter1");
+  // Forget what BlueZ cached about the device (an unpaired, unconnected
+  // entry) so the address type and everything else come from this scan's
+  // advertisement. A stale entry connects to the wrong address type and
+  // simply times out; Home Assistant's own connector clears the cache the
+  // same way when connections fail.
+  try {
+    const objects = await managedObjects();
+    const dev = objects[path]?.["org.bluez.Device1"];
+    if (dev && !dev.Connected?.value && !dev.Paired?.value) await a.RemoveDevice(path);
+  } catch { /* not cached, fine */ }
   try { await a.SetDiscoveryFilter({ Transport: new Variant("s", "le") }); } catch { /* older BlueZ */ }
   try { await a.StartDiscovery(); } catch (error) { if (!String(error).includes("InProgress")) throw error; }
   const deadline = Date.now() + ms;
@@ -114,13 +124,18 @@ async function waitForAdvertising(adapter: string, path: string, ms: number): Pr
     while (Date.now() < deadline) {
       const objects = await managedObjects();
       const dev = objects[path]?.["org.bluez.Device1"];
-      if (dev && (dev.RSSI != null || dev.Connected?.value)) return true;
+      if (dev && (dev.RSSI != null || dev.Connected?.value)) return dev;
       await new Promise((r) => setTimeout(r, 500));
     }
-    return false;
+    return null;
   } finally {
     try { await a.StopDiscovery(); } catch { /* fine */ }
   }
+}
+
+function describe(dev: Record<string, Variant> | null): string {
+  if (!dev) return "";
+  return ` [AddressType=${dev.AddressType?.value} RSSI=${dev.RSSI?.value ?? "?"} Connected=${dev.Connected?.value} Paired=${dev.Paired?.value} Name=${dev.Name?.value ?? "?"}]`;
 }
 
 export async function connect(address: string, attempts = CONNECT_ATTEMPTS): Promise<Connection> {
@@ -129,9 +144,8 @@ export async function connect(address: string, attempts = CONNECT_ATTEMPTS): Pro
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
-      if (!(await waitForAdvertising(adapter, path, attempt === 1 ? 8000 : 4000))) {
-        throw new Error("not advertising: the printer is asleep or off — switch it on and try again");
-      }
+      const seen = await waitForAdvertising(adapter, path, attempt === 1 ? 8000 : 4000);
+      if (!seen) throw new Error("not advertising: the printer is asleep or off — switch it on and try again");
       await new Promise((r) => setTimeout(r, SETTLE_AFTER_SCAN_MS));
       const obj = await systemBus().getProxyObject(BLUEZ, path);
       const device = obj.getInterface("org.bluez.Device1");
@@ -139,14 +153,9 @@ export async function connect(address: string, attempts = CONNECT_ATTEMPTS): Pro
       try {
         await withTimeout(device.Connect(), CONNECT_TIMEOUT_MS, "connect");
       } catch (error) {
-        // The device's own view of things, for the log: address type and
-        // signal are what usually explain a refused LE connection.
-        let detail = "";
-        try {
-          const all = (await props.GetAll("org.bluez.Device1")) as Record<string, Variant>;
-          detail = ` [AddressType=${all.AddressType?.value} RSSI=${all.RSSI?.value ?? "?"} Connected=${all.Connected?.value} Bonded=${all.Bonded?.value} Trusted=${all.Trusted?.value}]`;
-        } catch { /* fine */ }
-        throw new Error(`${error instanceof Error ? error.message : error}${detail}`);
+        // What the scan saw, for the log: address type and signal are what
+        // usually explain an LE connection that never completes.
+        throw new Error(`${error instanceof Error ? error.message : error}${describe(seen)}`);
       }
       await waitForProperty(props, "org.bluez.Device1", "ServicesResolved", true, RESOLVE_TIMEOUT_MS);
       return connection(path, obj);
