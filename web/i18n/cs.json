@@ -305,11 +305,11 @@
   "coffees.process": "Zpracování",
   "coffees.roast_level": "Pražení",
   "coffees.bag_g": "Balení (g)",
-  "coffees.target_time_min_s": "Cílový čas od (s)",
-  "coffees.target_time_max_s": "Cílový čas do (s)",
-  "coffees.target_ratio": "Cílové ratio (1:x)",
+  "coffees.target_time_min_s": "Cíl: čas extrakce od (s)",
+  "coffees.target_time_max_s": "Cíl: čas extrakce do (s)",
+  "coffees.target_ratio": "Cíl: ratio (1:x)",
   "coffees.note": "Poznámka",
-  "coffees.targets_hint": "Cíle používá dial-in: časové okno extrakce a ratio, na které se u této kávy míří. Balení slouží k odhadu zásoby.",
+  "coffees.targets_hint": "Cíle používá dial-in: shot kratší než „od“ dostane radu mlít jemněji, delší než „do“ hruběji, ratio mimo ±10 % radu zastavit dřív nebo nechat téct déle. Balení slouží k odhadu zásoby.",
   "coffees.save": "Uložit",
   "coffees.saved": "Káva uložena.",
   "coffees.exists": "Káva s tímhle názvem a pražírnou už existuje.",
@@ -398,5 +398,10 @@
   "card.profile_failed": "Profil se nepodařilo zapsat:",
   "card.failed": "Kartu se nepodařilo nahrát.",
   "shot.avg_flow": "Průměrný průtok",
-  "shot.compare_delta": "rozdíl"
+  "shot.compare_delta": "rozdíl",
+  "coffees.roast.light": "světlé",
+  "coffees.roast.medium_light": "světle střední",
+  "coffees.roast.medium": "střední",
+  "coffees.roast.medium_dark": "tmavě střední",
+  "coffees.roast.dark": "tmavé"
 }

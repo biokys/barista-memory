@@ -15,12 +15,23 @@ const FIELDS = [
   ["bag_g", "number"], ["target_time_min_s", "number"], ["target_time_max_s", "number"], ["target_ratio", "number"],
 ];
 
+/** Roast levels as stored; the labels come from the dictionary. */
+const ROAST_LEVELS = ["light", "medium_light", "medium", "medium_dark", "dark"];
+
+function roastLabel(level) {
+  return level ? (ROAST_LEVELS.includes(level) ? t("coffees.roast." + level) : level) : null;
+}
+
 function form(c = {}, submitLabel) {
   const input = (name, type) => `<div class="field"><label>${t("coffees." + name)}</label><input name="${name}" type="${type}" ${type === "number" ? 'step="0.1" min="0"' : ""} value="${c[name] ?? ""}" ${name === "name" ? "required" : ""}></div>`;
+  // A select over the usual levels; a value typed before the select existed
+  // (or by the MCP) stays selectable rather than silently changing.
+  const levels = ROAST_LEVELS.includes(c.roast_level) || !c.roast_level ? ROAST_LEVELS : [c.roast_level, ...ROAST_LEVELS];
+  const roastSelect = `<div class="field"><label>${t("coffees.roast_level")}</label><select name="roast_level"><option value="">–</option>${levels.map((l) => `<option value="${l}" ${l === c.roast_level ? "selected" : ""}>${ROAST_LEVELS.includes(l) ? t("coffees.roast." + l) : l}</option>`).join("")}</select></div>`;
   return `
     <form class="form" id="cf">
       <div class="grid cols-2">${input("name", "text")}${input("roaster", "text")}</div>
-      <div class="grid cols-3">${input("origin", "text")}${input("process", "text")}${input("roast_level", "text")}</div>
+      <div class="grid cols-3">${input("origin", "text")}${input("process", "text")}${roastSelect}</div>
       <div class="grid cols-3">${input("bag_g", "number")}${input("target_time_min_s", "number")}${input("target_time_max_s", "number")}</div>
       <div class="grid cols-2">${input("target_ratio", "number")}<div class="field"><label>${t("coffees.note")}</label><input name="note" value="${c.note ?? ""}"></div></div>
       <p class="faint small">${t("coffees.targets_hint")}</p>
@@ -57,7 +68,7 @@ async function renderList(view) {
     <a class="shot-row" href="#/coffees/${c.id}">
       <div class="main">
         <div class="title"><b>${c.name}</b><span class="muted">${c.roaster ?? ""}</span>${c.in_use ? `<span class="pill accent">${t("coffees.in_use")}</span>` : ""}${c.archived ? `<span class="pill">${t("coffees.archived")}</span>` : ""}</div>
-        <div class="meta">${[c.origin, c.process, c.roast_level].filter(Boolean).join(" · ") || "&nbsp;"}</div>
+        <div class="meta">${[c.origin, c.process, roastLabel(c.roast_level)].filter(Boolean).join(" · ") || "&nbsp;"}</div>
       </div>
       <div class="nums num">
         <span><b>${c.shots}</b><i>${t("coffees.shots")}</i></span>
@@ -118,7 +129,7 @@ async function renderDetail(view, id) {
     <div class="row spread">
       <div>
         <h1>${c.name}</h1>
-        <p class="muted">${[c.roaster, c.origin, c.process, c.roast_level].filter(Boolean).join(" · ")}</p>
+        <p class="muted">${[c.roaster, c.origin, c.process, roastLabel(c.roast_level)].filter(Boolean).join(" · ")}</p>
       </div>
       <div class="row">
         ${c.in_use ? `<span class="pill accent">${t("coffees.in_use")}</span>` : `<button class="btn sm ghost" id="use">${t("coffees.use")}</button>`}

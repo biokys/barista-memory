@@ -305,11 +305,11 @@
   "coffees.process": "Process",
   "coffees.roast_level": "Roast level",
   "coffees.bag_g": "Bag (g)",
-  "coffees.target_time_min_s": "Target time from (s)",
-  "coffees.target_time_max_s": "Target time to (s)",
-  "coffees.target_ratio": "Target ratio (1:x)",
+  "coffees.target_time_min_s": "Target: extraction time from (s)",
+  "coffees.target_time_max_s": "Target: extraction time to (s)",
+  "coffees.target_ratio": "Target: ratio (1:x)",
   "coffees.note": "Note",
-  "coffees.targets_hint": "Targets are what the dial-in aims for: an extraction time window and a ratio. The bag weight feeds the stock estimate.",
+  "coffees.targets_hint": "Targets drive the dial-in: a shot shorter than “from” gets “finer”, longer than “to” gets “coarser”, a ratio off by more than ±10 % gets “stop earlier” or “let it run”. The bag weight feeds the stock estimate.",
   "coffees.save": "Save",
   "coffees.saved": "Coffee saved.",
   "coffees.exists": "A coffee with this name and roaster already exists.",
@@ -398,5 +398,10 @@
   "card.profile_failed": "The profile could not be written:",
   "card.failed": "The card could not be imported.",
   "shot.avg_flow": "Average flow",
-  "shot.compare_delta": "difference"
+  "shot.compare_delta": "difference",
+  "coffees.roast.light": "light",
+  "coffees.roast.medium_light": "medium-light",
+  "coffees.roast.medium": "medium",
+  "coffees.roast.medium_dark": "medium-dark",
+  "coffees.roast.dark": "dark"
 }
