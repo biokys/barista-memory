@@ -22,12 +22,19 @@ import type { StateRow } from "./machineState.js";
  */
 export const TAU_COOL_MIN = 58;
 export const TAU_HEAT_MIN = Number(process.env.GAGGIMATE_TAU_HEAT_MIN ?? 20);
+/**
+ * Fallback for the cold level when the archive has not seen the machine cold
+ * yet. Normally the level is learned (see coldBaseline in machineState):
+ * the firmware reports raw sensor minus the user's temperatureOffset, so a
+ * machine at 22 °C room temperature with offset 8 reports 14, and every
+ * household has a different room and offset.
+ */
 export const ROOM_TEMP_C = Number(process.env.GAGGIMATE_ROOM_TEMP_C ?? 22);
 
-/** Fraction of the way from room to setpoint the mass has come, 0–100. */
-export function settledness(massTemp: number, setpoint: number): number {
-  if (setpoint <= ROOM_TEMP_C) return 0;
-  const frac = (massTemp - ROOM_TEMP_C) / (setpoint - ROOM_TEMP_C);
+/** Fraction of the way from the cold level to setpoint the mass has come, 0–100. */
+export function settledness(massTemp: number, setpoint: number, baseline = ROOM_TEMP_C): number {
+  if (setpoint <= baseline) return 0;
+  const frac = (massTemp - baseline) / (setpoint - baseline);
   return Math.round(Math.max(0, Math.min(1, frac)) * 100);
 }
 
@@ -46,23 +53,23 @@ function relax(current: number, towards: number, minutes: number, tauMin: number
  *
  * Returns null when no sample precedes `at` — unknown, never cold.
  */
-export function massTemperatureAt(samples: StateRow[], at: number): number | null {
+export function massTemperatureAt(samples: StateRow[], at: number, baseline = ROOM_TEMP_C): number | null {
   let mass: number | null = null;
   let prev: StateRow | null = null;
 
   for (const row of samples) {
     if (row.sampled_at > at) break;
     if (mass === null) {
-      mass = row.reachable === 1 && row.current_temp != null ? row.current_temp : ROOM_TEMP_C;
+      mass = row.reachable === 1 && row.current_temp != null ? row.current_temp : baseline;
       prev = row;
       continue;
     }
-    mass = step(mass, prev!, row.sampled_at - prev!.sampled_at);
+    mass = step(mass, prev!, row.sampled_at - prev!.sampled_at, baseline);
     prev = row;
   }
 
   if (mass === null || prev === null) return null;
-  return step(mass, prev, at - prev.sampled_at);
+  return step(mass, prev, at - prev.sampled_at, baseline);
 }
 
 /**
@@ -71,7 +78,7 @@ export function massTemperatureAt(samples: StateRow[], at: number): number | nul
  * chart plots beside the sensor reading, so it needs every point of a day
  * without walking the history once per point.
  */
-export function massTemperatureSeries(samples: StateRow[], at: number[]): Array<number | null> {
+export function massTemperatureSeries(samples: StateRow[], at: number[], baseline = ROOM_TEMP_C): Array<number | null> {
   const out: Array<number | null> = [];
   let mass: number | null = null;
   let prev: StateRow | null = null;
@@ -79,7 +86,7 @@ export function massTemperatureSeries(samples: StateRow[], at: number[]): Array<
 
   const emitUpTo = (limit: number) => {
     while (i < at.length && at[i] <= limit) {
-      out.push(mass === null || prev === null ? null : step(mass, prev, at[i] - prev.sampled_at));
+      out.push(mass === null || prev === null ? null : step(mass, prev, at[i] - prev.sampled_at, baseline));
       i++;
     }
   };
@@ -87,9 +94,9 @@ export function massTemperatureSeries(samples: StateRow[], at: number[]): Array<
   for (const row of samples) {
     emitUpTo(row.sampled_at - 1);
     if (mass === null) {
-      mass = row.reachable === 1 && row.current_temp != null ? row.current_temp : ROOM_TEMP_C;
+      mass = row.reachable === 1 && row.current_temp != null ? row.current_temp : baseline;
     } else {
-      mass = step(mass, prev!, row.sampled_at - prev!.sampled_at);
+      mass = step(mass, prev!, row.sampled_at - prev!.sampled_at, baseline);
     }
     prev = row;
   }
@@ -108,7 +115,7 @@ export function massTemperatureSeries(samples: StateRow[], at: number[]): Array<
  * and the machine is treated as cooling once the boiler drops well below
  * target.
  */
-function step(mass: number, during: StateRow, seconds: number): number {
+function step(mass: number, during: StateRow, seconds: number, baseline: number): number {
   if (seconds <= 0) return mass;
   const minutes = seconds / 60;
   const target = during.target_temp ?? 0;
@@ -120,7 +127,7 @@ function step(mass: number, during: StateRow, seconds: number): number {
   }
   // Not heating: the mass drifts towards wherever the boiler is, which is the
   // room for a machine that is off, and the boiler's reading otherwise.
-  const towards = during.reachable === 1 && boiler != null ? Math.max(ROOM_TEMP_C, boiler) : ROOM_TEMP_C;
+  const towards = during.reachable === 1 && boiler != null ? Math.max(baseline, boiler) : baseline;
   return relax(mass, towards, minutes, TAU_COOL_MIN);
 }
 

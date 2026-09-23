@@ -3,7 +3,7 @@ import { config } from "./config.js";
 import { openDatabase, type ShotContextRow } from "./db/db.js";
 import { fetchIndex, fetchSlog, parseSlog } from "./device/client.js";
 import { stableWeight } from "./stableWeight.js";
-import { powerSessions, machineContextForShot, allStateSamples } from "./machineState.js";
+import { powerSessions, machineContextForShot, allStateSamples, coldBaseline } from "./machineState.js";
 import { syncNotes } from "./notesSync.js";
 import { classifyShots, utilityProfileIds } from "./maintenance.js";
 
@@ -73,7 +73,7 @@ export function recomputeMachineContext(db: DatabaseSync, all = false): number {
 
   let changed = 0;
   for (const row of rows) {
-    const machine = machineContextForShot(sessions, row.started_at, samples);
+    const machine = machineContextForShot(sessions, row.started_at, samples, coldBaseline(db, row.started_at));
     if (machine.powered_for_s == null && !all) continue;
     update.run(
       machine.powered_for_s,
@@ -160,7 +160,7 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
       }
 
       const derived = deriveWeight(slog, entry.id, entry.volume);
-      const machine = machineContextForShot(sessions, entry.timestamp, samples);
+      const machine = machineContextForShot(sessions, entry.timestamp, samples, coldBaseline(db, entry.timestamp));
 
       insert.run(
         entry.id,

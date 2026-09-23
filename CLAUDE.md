@@ -169,6 +169,17 @@ stores the archive-side inputs each push was built from; a pass where they are
 unchanged opens no WebSocket. Before that, every pass cost one connection per
 shot on the device, forever, to discover nothing had changed.
 
+**The machine reports raw sensor minus `temperatureOffset`.** Firmware
+`Controller::onTempRead` subtracts the user's offset before anything sees the
+value, so a cold machine at 22 °C room with offset 8 reports 14 °C (seen
+2026-09-23). The thermal model therefore does not assume a room temperature:
+`coldBaseline()` learns the cold level as the lowest plausible reading of
+the last 14 days (5–35 °C band), `ROOM_TEMP_C` is only the fallback before
+the machine was ever seen cold. Settledness is measured from that level.
+The machine chart evaluates the model on a minute grid (`model` in
+`/api/machine/state`), not only at samples: a machine holding setpoint
+stores one heartbeat per ten minutes while the body is still climbing.
+
 **`machine_settledness` is the readiness figure; `machine_settled` is not.**
 `thermalModel.ts` tracks the slow thermal mass (group, brass) the sensor cannot
 see, as a fraction of the way from room to setpoint. A first-order model with

@@ -154,18 +154,52 @@ export function shotChart(container, shot, compare = null, { stableWeight = null
  * Boiler temperature over hours: current temp, target as a faint step,
  * unreachable stretches as grey bands, shots as amber ticks.
  */
-export function machineChart(container, samples, shots, sessions, events = []) {
+/**
+ * Measurements and the model on one x axis. Samples are stored on change,
+ * so a machine holding its setpoint has one every ten minutes while the
+ * modelled body is still climbing; the model therefore comes on its own
+ * minute grid and the two are merged. Between two reachable samples the
+ * sensor line is interpolated at grid times (a straight segment, exactly
+ * what uPlot would draw anyway), so inserting points adds no gaps; across an
+ * unreachable sample it stays a gap. Point markers are drawn only where a
+ * real sample is.
+ */
+function mergeMachineSeries(samples, model) {
+  const times = new Set(samples.map((s) => s.sampled_at));
+  const x = [...new Set([...samples.map((s) => s.sampled_at), ...(model?.t ?? [])])].sort((a, b) => a - b);
+  const byTime = new Map(samples.map((s) => [s.sampled_at, s]));
+  const modelAt = new Map((model?.t ?? []).map((t, i) => [t, i]));
+  const temp = [], target = [], mass = [], settled = [], real = [];
+  let prev = null; let nextIdx = 0;
+  for (const t of x) {
+    const s = byTime.get(t);
+    if (s) { prev = s; while (nextIdx < samples.length && samples[nextIdx].sampled_at <= t) nextIdx++; }
+    const next = samples[nextIdx];
+    if (s) {
+      real.push(true);
+      temp.push(s.reachable ? s.current_temp : null);
+      target.push(s.reachable && s.target_temp > 0 ? s.target_temp : null);
+    } else {
+      real.push(false);
+      const bridge = prev && next && prev.reachable && next.reachable;
+      const f = bridge ? (t - prev.sampled_at) / (next.sampled_at - prev.sampled_at) : 0;
+      temp.push(bridge ? prev.current_temp + (next.current_temp - prev.current_temp) * f : null);
+      target.push(bridge && prev.target_temp > 0 && next.target_temp > 0 ? prev.target_temp + (next.target_temp - prev.target_temp) * f : null);
+    }
+    const mi = modelAt.get(t);
+    mass.push(mi != null ? model.mass[mi] : (s?.mass_temp ?? null));
+    settled.push(mi != null ? model.settledness[mi] : (s?.settledness ?? null));
+  }
+  return { x, temp, target, mass, settled, real };
+}
+
+export function machineChart(container, samples, shots, sessions, events = [], model = null) {
   const c = colors();
-  const x = samples.map((s) => s.sampled_at);
-  const data = [
-    x,
-    samples.map((s) => (s.reachable ? s.current_temp : null)),
-    samples.map((s) => (s.reachable && s.target_temp > 0 ? s.target_temp : null)),
-    // The modelled body temperature is defined while the machine is off too
-    // (it is cooling), so it is the one line that crosses the grey bands.
-    samples.map((s) => s.mass_temp ?? null),
-    samples.map((s) => s.settledness ?? null),
-  ];
+  const merged = mergeMachineSeries(samples, model);
+  const x = merged.x;
+  const realIdx = merged.real.map((r, i) => (r ? i : -1)).filter((i) => i >= 0);
+  const onlyReal = (u, seriesIdx, show) => (show ? realIdx : null);
+  const data = [x, merged.temp, merged.target, merged.mass, merged.settled];
   const plot = new uPlot({
     width: container.clientWidth, height: 280,
     cursor: { drag: { x: true, y: false } },
@@ -177,8 +211,8 @@ export function machineChart(container, samples, shots, sessions, events = []) {
     ],
     series: [
       { value: "{HH}:{mm}" },
-      { label: "°C", stroke: c.temp, width: 2, spanGaps: false, value: (u, v) => (v == null ? "–" : v.toFixed(1)) },
-      { label: "target", stroke: c.faint, width: 1, dash: [3, 4], spanGaps: false, value: (u, v) => (v == null ? "–" : v) },
+      { label: "°C", stroke: c.temp, width: 2, spanGaps: false, points: { filter: onlyReal }, value: (u, v) => (v == null ? "–" : v.toFixed(1)) },
+      { label: "target", stroke: c.faint, width: 1, dash: [3, 4], spanGaps: false, points: { filter: onlyReal }, value: (u, v) => (v == null ? "–" : v) },
       // No point markers: the body temperature is a model evaluated at the
       // sample times, not a measurement, and dots would say otherwise.
       { label: "body", stroke: c.accent, width: 1.5, dash: [6, 4], spanGaps: true, points: { show: false }, value: (u, v) => (v == null ? "–" : v.toFixed(1)) },

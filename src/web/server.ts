@@ -14,7 +14,7 @@ import { bluetoothAvailable } from "../printer/bluez.js";
 import { exportArchive, importArchive } from "../transfer.js";
 import { liveStatus, machineReachable } from "../liveStatus.js";
 import { groupSettings } from "../device/machineSettings.js";
-import { currentConditions, powerSessions, allStateSamples, type StateRow } from "../machineState.js";
+import { currentConditions, powerSessions, allStateSamples, coldBaseline, type StateRow } from "../machineState.js";
 import { massTemperatureSeries, settledness } from "../thermalModel.js";
 import { changeMode, SWITCHABLE_MODES } from "../machineControl.js";
 import { handleMcpRequest, mcpEnabled } from "../mcp/http.js";
@@ -357,16 +357,35 @@ route("GET", "/api/machine/state", async (_req, res, _p, url) => {
     .all(since, until) as unknown as StateRow[];
   // The modelled body temperature needs the history before the window too:
   // a machine switched on an hour before `since` is still cooling from it.
-  const mass = massTemperatureSeries(allStateSamples(db), window.map((s) => s.sampled_at));
+  const history = allStateSamples(db);
+  const baseline = coldBaseline(db, until);
+  const mass = massTemperatureSeries(history, window.map((s) => s.sampled_at), baseline);
   const samples = window.map((s, i) => ({
     ...s,
     mass_temp: mass[i] == null ? null : Math.round(mass[i]! * 10) / 10,
-    settledness: mass[i] == null || !s.target_temp ? null : settledness(mass[i]!, s.target_temp),
+    settledness: mass[i] == null || !s.target_temp ? null : settledness(mass[i]!, s.target_temp, baseline),
   }));
+  // The model moves between samples — a machine holding its setpoint stores
+  // one heartbeat per ten minutes while the body is still warming — so the
+  // chart gets it on a minute grid, independent of when samples happened.
+  const step = Math.max(60, Math.floor((until - since) / 2000));
+  const grid: number[] = [];
+  for (let t = since; t <= until; t += step) grid.push(t);
+  const gridMass = massTemperatureSeries(history, grid, baseline);
+  const setpointAt = (t: number) => {
+    let target = 94;
+    for (const s of window) { if (s.sampled_at > t) break; if (s.reachable && s.target_temp) target = s.target_temp; }
+    return target;
+  };
+  const model = {
+    t: grid,
+    mass: gridMass.map((m) => (m == null ? null : Math.round(m * 10) / 10)),
+    settledness: gridMass.map((m, i) => (m == null ? null : settledness(m, setpointAt(grid[i]), baseline))),
+  };
   const shots = db
     .prepare("SELECT id, started_at, ratio, machine_settledness FROM shot_context WHERE started_at BETWEEN ? AND ? ORDER BY started_at")
     .all(since, until);
-  json(res, 200, { samples, shots, events: listEvents(db, since, until), sessions: powerSessions(db, since), since, until });
+  json(res, 200, { samples, model, baseline, shots, events: listEvents(db, since, until), sessions: powerSessions(db, since), since, until });
 });
 
 route("POST", "/api/machine/mode", async (req, res) => {

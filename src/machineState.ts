@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { MachineStatus } from "./device/client.js";
-import { massTemperatureAt, settledness } from "./thermalModel.js";
+import { massTemperatureAt, settledness, ROOM_TEMP_C } from "./thermalModel.js";
 
 /** Temperature move, in °C, that is worth its own row. */
 const TEMP_EPSILON = 1.0;
@@ -183,6 +183,8 @@ export function powerSessions(db: DatabaseSync, sinceS?: number, gapS = HEARTBEA
 
 export interface Conditions {
   reachable: boolean;
+  /** What the machine reports when cold, learned from the archive (room minus the firmware's offset). */
+  cold_baseline_c: number;
   mode: number | null;
   mode_name: string | null;
   target_temp: number | null;
@@ -243,12 +245,14 @@ export function currentConditions(db: DatabaseSync, live: MachineStatus | null):
       ? now - open.heating_started_at
       : null;
 
-  const mass = massTemperatureAt(allStateSamples(db), now);
+  const baseline = coldBaseline(db, now);
+  const mass = massTemperatureAt(allStateSamples(db), now, baseline);
   const setpoint = live && live.targetTemp > 0 ? live.targetTemp : 94;
 
   return {
     reachable: live != null,
-    settledness: mass == null ? null : settledness(mass, setpoint),
+    settledness: mass == null ? null : settledness(mass, setpoint, baseline),
+    cold_baseline_c: baseline,
     mode: live?.mode ?? null,
     mode_name: live ? (MODE_NAMES[live.mode] ?? String(live.mode)) : null,
     target_temp: live?.targetTemp ?? null,
@@ -299,7 +303,8 @@ export interface ShotMachineContext {
 export function machineContextForShot(
   sessions: PowerSession[],
   startedAt: number,
-  samples: StateRow[] = []
+  samples: StateRow[] = [],
+  baseline = ROOM_TEMP_C
 ): ShotMachineContext {
   const session = sessions.find(
     (candidate) =>
@@ -309,7 +314,7 @@ export function machineContextForShot(
     return { powered_for_s: null, heating_for_s: null, heatup_s: null, settled: null, settledness: null };
   }
 
-  const mass = massTemperatureAt(samples, startedAt);
+  const mass = massTemperatureAt(samples, startedAt, baseline);
   const setpoint = samples.reduce((last, row) => ((row.target_temp ?? 0) > 0 ? (row.target_temp as number) : last), 94);
 
   // The episode in force is the last one that began at or before the shot.
@@ -334,11 +339,34 @@ export function machineContextForShot(
     heating_for_s: heatingFor,
     heatup_s: heatupS,
     settled,
-    settledness: mass == null ? null : settledness(mass, setpoint),
+    settledness: mass == null ? null : settledness(mass, setpoint, baseline),
   };
 }
 
 /** All state samples, oldest first — the input the thermal model walks. */
+/** How far back the cold level is learned from; long enough to include a night off. */
+const BASELINE_WINDOW_S = 14 * 86400;
+/** Readings outside this band are sensor errors, not a cold machine. */
+const BASELINE_MIN_C = 5;
+const BASELINE_MAX_C = 35;
+
+/**
+ * The temperature the machine reports when it is cold, learned from the
+ * archive: the lowest plausible reading of the last two weeks, which is the
+ * first sample after a night off. This absorbs both the room and the
+ * firmware's temperatureOffset (reported = raw − offset), neither of which
+ * this code can know otherwise. Falls back to ROOM_TEMP_C until the machine
+ * has been seen cold once.
+ */
+export function coldBaseline(db: DatabaseSync, now = Math.floor(Date.now() / 1000)): number {
+  const row = db
+    .prepare(
+      "SELECT MIN(current_temp) AS t FROM machine_state WHERE reachable = 1 AND sampled_at >= ? AND current_temp BETWEEN ? AND ?"
+    )
+    .get(now - BASELINE_WINDOW_S, BASELINE_MIN_C, BASELINE_MAX_C) as { t: number | null };
+  return row?.t != null ? Math.round(row.t * 10) / 10 : ROOM_TEMP_C;
+}
+
 export function allStateSamples(db: DatabaseSync): StateRow[] {
   return db.prepare("SELECT * FROM machine_state ORDER BY sampled_at ASC").all() as unknown as StateRow[];
 }
