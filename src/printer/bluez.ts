@@ -9,7 +9,11 @@ import dbus, { Variant, type ProxyObject, type ClientInterface } from "dbus-next
 
 const BLUEZ = "org.bluez";
 const CONNECT_ATTEMPTS = 3;
-const CONNECT_TIMEOUT_MS = 20000;
+// Longer than BlueZ's own LE connection timeout, so its error (the reason)
+// reaches the log instead of our bare "timed out".
+const CONNECT_TIMEOUT_MS = 45000;
+/** Some adapters refuse a connection started the instant discovery stops. */
+const SETTLE_AFTER_SCAN_MS = 1000;
 const RESOLVE_TIMEOUT_MS = 15000;
 
 export interface FoundDevice {
@@ -128,10 +132,22 @@ export async function connect(address: string): Promise<Connection> {
       if (!(await waitForAdvertising(adapter, path, attempt === 1 ? 8000 : 4000))) {
         throw new Error("not advertising: the printer is asleep or off — switch it on and try again");
       }
+      await new Promise((r) => setTimeout(r, SETTLE_AFTER_SCAN_MS));
       const obj = await systemBus().getProxyObject(BLUEZ, path);
       const device = obj.getInterface("org.bluez.Device1");
       const props = obj.getInterface("org.freedesktop.DBus.Properties");
-      await withTimeout(device.Connect(), CONNECT_TIMEOUT_MS, "connect");
+      try {
+        await withTimeout(device.Connect(), CONNECT_TIMEOUT_MS, "connect");
+      } catch (error) {
+        // The device's own view of things, for the log: address type and
+        // signal are what usually explain a refused LE connection.
+        let detail = "";
+        try {
+          const all = (await props.GetAll("org.bluez.Device1")) as Record<string, Variant>;
+          detail = ` [AddressType=${all.AddressType?.value} RSSI=${all.RSSI?.value ?? "?"} Connected=${all.Connected?.value} Bonded=${all.Bonded?.value} Trusted=${all.Trusted?.value}]`;
+        } catch { /* fine */ }
+        throw new Error(`${error instanceof Error ? error.message : error}${detail}`);
+      }
       await waitForProperty(props, "org.bluez.Device1", "ServicesResolved", true, RESOLVE_TIMEOUT_MS);
       return connection(path, obj);
     } catch (error) {
