@@ -136,6 +136,22 @@ export async function renderSettings(view) {
         toast(t("printer.saved")); load();
       } catch (err) { toast(String(err.message), "bad"); }
     });
+    // The receipt card was rendered with its own Save from 0.3.0 on, but the
+    // button was never wired — the fields were read by nothing (2026-09-24).
+    view.querySelector("#rc-save")?.addEventListener("click", async () => {
+      try {
+        await api.updatePrinter({
+          cafe_name: view.querySelector("#rc-name").value,
+          cafe_tagline: view.querySelector("#rc-tagline").value,
+          thanks: view.querySelector("#rc-thanks").value,
+          greetings: view.querySelector("#rc-greetings").value,
+          web_url: view.querySelector("#rc-url").value,
+          show_chart: view.querySelector("#rc-chart").checked,
+          show_qr: view.querySelector("#rc-qr").checked,
+        });
+        toast(t("printer.saved")); load();
+      } catch (err) { toast(String(err.message), "bad"); }
+    });
     view.querySelector("#printer-status")?.addEventListener("click", async (e) => {
       const button = e.currentTarget; button.disabled = true; button.textContent = t("printer.checking");
       try {
