@@ -164,9 +164,19 @@ function describe(dev: Record<string, Variant> | null): string {
 async function describeStack(adapter: string, device: ProxyObject): Promise<string> {
   try {
     const objects = await managedObjects();
-    const kernel = objects[adapter]?.["org.bluez.Adapter1"]?.ExperimentalFeatures?.value as string[] | undefined;
+    const a = objects[adapter]?.["org.bluez.Adapter1"];
+    const kernel = a?.ExperimentalFeatures?.value as string[] | undefined;
     const bearer = Object.keys(device.interfaces).includes("org.bluez.Bearer.LE1");
-    return ` [bluetoothd-experimental=${bearer ? "yes" : "no"} kernel-experimental=${kernel ? kernel.length : "no"}]`;
+    // Which radio actually took the Connect(). A new dongle changed nothing on
+    // Home Assistant (2026-09-24), which leaves three things the log could not
+    // tell apart: the old adapter still being the default, a counterfeit
+    // "CSR8510" (the Modalias carries the USB ids, and the fakes all share
+    // 0a12:0001), and the host's own scanner holding the radio (Discovering).
+    const adapters = Object.keys(objects).filter((path) => objects[path]["org.bluez.Adapter1"]).length;
+    const radio = a
+      ? ` [adapter=${a.Address?.value ?? "?"} modalias=${a.Modalias?.value ?? "?"} discovering=${a.Discovering?.value ?? "?"} adapters=${adapters}]`
+      : "";
+    return `${radio} [bluetoothd-experimental=${bearer ? "yes" : "no"} kernel-experimental=${kernel ? kernel.length : "no"}]`;
   } catch {
     return "";
   }

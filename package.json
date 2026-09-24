@@ -1,6 +1,6 @@
 {
   "name": "barista-memory",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "private": true,
   "type": "module",
   "description": "Remembers what the barista cannot: every shot, the beans and grind in force, and how warm the machine really was",
