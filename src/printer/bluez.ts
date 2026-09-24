@@ -238,26 +238,29 @@ export async function connect(address: string, attempts = CONNECT_ATTEMPTS): Pro
 }
 
 /**
- * Connect over LE explicitly. The MXW01 advertises flags that claim BR/EDR
- * support it does not have, and BlueZ 5.80+ answers Device1.Connect() on such
- * a "dual-mode" device by trying classic Bluetooth first — which never
- * completes (seen on Home Assistant OS, BlueZ 5.8x, 2026-09-23; BlueZ 5.66
- * on the Pi has no such logic and connected at once). The per-bearer
- * interface, or the PreferredBearer property where only that exists, pins
- * the attempt to LE; older BlueZ has neither and Connect() is right there.
+ * Connect over LE explicitly. The MXW01 advertises flags 0x0A — LE General
+ * Discoverable without "BR/EDR Not Supported" — so it claims classic
+ * Bluetooth it does not have, and BlueZ 5.80+ answers a bare
+ * Device1.Connect() on such a "dual-mode" device by trying BR/EDR first,
+ * which never completes (Home Assistant OS, BlueZ 5.8x; BlueZ 5.66 on the Pi
+ * has no such logic and connects at once). PreferredBearer=le on the device
+ * object pins the choice before the call.
  */
 async function connectOverLe(obj: ProxyObject, device: ClientInterface, props: ClientInterface, note: (what: string) => void): Promise<void> {
-  const ifaces = Object.keys(obj.interfaces);
-  if (ifaces.includes("org.bluez.Bearer.LE1")) {
-    note("Bearer.LE1.Connect()");
-    await obj.getInterface("org.bluez.Bearer.LE1").Connect();
-    note("Bearer.LE1.Connect() returned");
-    return;
-  }
+  // Not the per-bearer interface. On Home Assistant OS (bluetoothd -E,
+  // BlueZ 5.86) the device object does expose org.bluez.Bearer.LE1, and its
+  // Connect() was what every 0.3.x–0.4.10 release called there — and what
+  // never completed, with two different dongles, a host reboot and no other
+  // scanner running (2026-09-24). On the same host, in the same minute,
+  // setting PreferredBearer=le and calling the plain Device1.Connect()
+  // linked in about a second (found with bluetoothctl: `bearer <dev> le`,
+  // then `connect`). The property path was only ever the fallback here, so
+  // on the host that needed it most it was never taken.
   let preferred = "PreferredBearer=le";
   try {
     await props.Set("org.bluez.Device1", "PreferredBearer", new Variant("s", "le"));
   } catch {
+    // BlueZ 5.66 on the Pi has no such property and connects over LE anyway.
     preferred = "no PreferredBearer";
   }
   note(`Device1.Connect() (${preferred})`);
