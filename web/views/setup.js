@@ -14,7 +14,11 @@ function coffeePicker(coffees, selectedId, allowNew) {
 export async function renderSetup(view) {
   let editing = null;
   const load = async () => {
-    const [data, { coffees }] = await Promise.all([api.setups(), api.coffees()]);
+    const [data, { coffees }, prefs] = await Promise.all([api.setups(), api.coffees(), api.preferences().catch(() => null)]);
+    // The grind controls follow the grinder's own scale from Settings; the
+    // fallback is only for a database that predates the preference.
+    const scale = { min: prefs?.grind_min ?? 0, max: prefs?.grind_max ?? 90, step: prefs?.grind_step ?? 0.5 };
+    const grinder = prefs?.grinder || "";
     const cur = data.current;
     view.innerHTML = `
       <h1>${t("setup.title")}</h1>
@@ -36,7 +40,7 @@ export async function renderSetup(view) {
                 <div class="grid cols-3">
                   <div class="field"><label>${t("setup.coffee")}</label>${coffeePicker(coffees, s.coffee_id, false)}</div>
                   <div class="field"><label>${t("setup.roast_date")}</label><input type="date" name="roast_date" value="${s.roast_date ?? ""}"></div>
-                  <div class="field"><label>${t("setup.grind")}</label><input name="grind_setting" value="${s.grind_setting ?? ""}"></div>
+                  <div class="field"><label>${t("setup.grind")}</label><input type="number" name="grind_setting" min="${scale.min}" max="${scale.max}" step="${scale.step}" value="${s.grind_setting ?? ""}"></div>
                   <div class="field"><label>${t("setup.dose")}</label><input type="number" step="0.1" name="dose_g" value="${s.dose_g ?? ""}"></div>
                   <div class="field"><label>${t("setup.valid_from")}</label><input type="datetime-local" name="valid_from" value="${toLocalInput(s.valid_from)}"></div>
                 </div>
@@ -56,7 +60,7 @@ export async function renderSetup(view) {
               <div class="field"><label>${t("setup.bean")}</label><input name="bean"></div>
               <div class="field"><label>${t("setup.roaster")}</label><input name="roaster"></div>
             </div>
-            <div class="field"><label>${t("setup.grind")} · <span class="range-v num" id="gv">${cur?.grind_setting ?? "12.5"}</span></label><input type="range" name="grind_setting" min="0" max="90" step="0.1" value="${cur?.grind_setting ?? 12.5}"></div>
+            <div class="field"><label>${t("setup.grind")}${grinder ? ` (${grinder}, ${scale.min}–${scale.max})` : ""} · <span class="range-v num" id="gv">${cur?.grind_setting ?? scale.min}</span></label><input type="range" name="grind_setting" min="${scale.min}" max="${scale.max}" step="${scale.step}" value="${cur?.grind_setting ?? scale.min}"></div>
             <div class="field"><label>${t("setup.dose")} · <span class="range-v num" id="dv">${cur?.dose_g ?? "18"}</span></label><input type="range" name="dose_g" min="12" max="24" step="0.1" value="${cur?.dose_g ?? 18}"></div>
             <div class="grid cols-2">
               <div class="field"><label>${t("setup.roast_date")}</label><input type="date" name="roast_date" value="${cur?.roast_date ?? ""}"></div>

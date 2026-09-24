@@ -70,6 +70,15 @@ export async function renderSettings(view) {
         <div class="grid cols-2">
           <div class="field"><label>${t("prefs.grinder")}</label><input id="pref-grinder" value="${stock.grinder ?? ""}" placeholder="DF64"><p class="faint small">${t("prefs.grinder_hint")}</p></div>
           <div class="field"><label>${t("stock.warn_g")} (g)</label><input type="number" id="stock-warn" min="0" step="10" value="${stock.stock_warn_g}"><p class="faint small">${t("stock.hint")}</p></div>
+          <div class="field"><label>${t("prefs.grind_scale")}</label>
+            <div class="row" style="gap:8px;flex-wrap:wrap">
+              <input type="number" id="pref-grind-min" step="any" value="${stock.grind_min}" style="width:6em" aria-label="${t("prefs.grind_min")}">
+              <span class="faint">–</span>
+              <input type="number" id="pref-grind-max" step="any" value="${stock.grind_max}" style="width:6em" aria-label="${t("prefs.grind_max")}">
+              <span class="faint">${t("prefs.grind_step")}</span>
+              <input type="number" id="pref-grind-step" step="any" min="0.01" value="${stock.grind_step}" style="width:6em" aria-label="${t("prefs.grind_step")}">
+            </div>
+            <p class="faint small">${t("prefs.grind_scale_hint")}</p></div>
         </div>
         <div class="row" style="margin-top:6px"><button class="btn sm" id="pref-save">${t("printer.save")}</button></div>
       </section>
@@ -84,8 +93,16 @@ export async function renderSettings(view) {
         <div class="row" style="margin-top:10px"><input type="file" id="import-file" accept=".db,application/vnd.sqlite3,application/octet-stream"><button class="btn sm" id="import-go">${t("transfer.import")}</button></div>
       </section>`;
     view.querySelector("#pref-save")?.addEventListener("click", async () => {
-      await api.updatePreferences({ grinder: view.querySelector("#pref-grinder").value, stock_warn_g: Number(view.querySelector("#stock-warn").value) });
-      toast(t("stock.saved"));
+      try {
+        await api.updatePreferences({
+          grinder: view.querySelector("#pref-grinder").value,
+          stock_warn_g: Number(view.querySelector("#stock-warn").value),
+          grind_min: Number(view.querySelector("#pref-grind-min").value),
+          grind_max: Number(view.querySelector("#pref-grind-max").value),
+          grind_step: Number(view.querySelector("#pref-grind-step").value),
+        });
+        toast(t("stock.saved"));
+      } catch (err) { toast(String(err.message), "bad"); }
     });
     view.querySelector("#card-go")?.addEventListener("click", async (e) => {
       const file = view.querySelector("#card-file").files[0];
