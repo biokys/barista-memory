@@ -58,6 +58,17 @@ read-only.
 the caller's fields onto it first. Verified by a no-change round trip of
 "Light 94" that came back identical.
 
+**BlueZ on Home Assistant OS: `Bearer.LE1.Connect()` never completes for the
+printer; `PreferredBearer=le` + `Device1.Connect()` does.** The MXW01
+advertises flags 0x0A (no "BR/EDR Not Supported"), so BlueZ 5.8x treats it as
+dual-mode and a bare Connect() tries classic Bluetooth first. Every release
+0.3.10–0.4.10 called the experimental per-bearer interface where it existed
+and hung for 45 s; two dongles were swapped and a host rebooted before
+`bluetoothctl bearer <dev> le; connect` on the host itself linked in a second
+(2026-09-24). The property path is the only one now. The dongles were never
+the cause — do not reopen that line first when a BLE connect hangs; reproduce
+with `bluetoothctl` on the host (SSH add-on, `root@<HA>`).
+
 **`GET /api/settings` returns `wifiPassword`, `apPassword` and `haPassword` in
 cleartext, unauthenticated.** Never pass that payload through unfiltered.
 
