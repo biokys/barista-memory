@@ -248,6 +248,8 @@
   "profiles.select_failed": "Nastavení profilu se nepovedlo.",
   "shot.receipt": "Účtenka",
   "shot.print": "Vytisknout",
+  "shot.print_confirm": "Vytisknout účtenku k shotu {id}?",
+  "shot.printing": "Tiskne se…",
   "printer.title": "Tiskárna účtenek",
   "printer.mac": "Bluetooth adresa tiskárny",
   "printer.scan": "Najít",

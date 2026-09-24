@@ -248,6 +248,8 @@
   "profiles.select_failed": "Could not set the profile.",
   "shot.receipt": "Receipt",
   "shot.print": "Print",
+  "shot.print_confirm": "Print the receipt for shot {id}?",
+  "shot.printing": "Printing…",
   "printer.title": "Receipt printer",
   "printer.mac": "Printer Bluetooth address",
   "printer.scan": "Find",

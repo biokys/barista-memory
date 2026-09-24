@@ -143,10 +143,16 @@ export async function renderShot(view, [id]) {
 
   // Comparison candidates: same bean if any, else the neighbours.
   const list = await api.shots({ limit: 40, ...(c.bean ? { bean: c.bean } : {}) });
+  // Printing is paper and a minute of the printer's time, and the button sits
+  // next to "Receipt" and "Previous" where a stray tap lands easily — so it
+  // asks first, like the other actions that cannot be undone. While the job
+  // runs the label says so; a bare greyed-out button read as "broken".
   view.querySelector("#print").onclick = async (e) => {
-    const button = e.currentTarget; button.disabled = true;
+    if (!confirm(t("shot.print_confirm", { id: c.id }))) return;
+    const button = e.currentTarget; const label = button.textContent;
+    button.disabled = true; button.textContent = t("shot.printing");
     try { const r = await api.printShot(c.id); toast(r.completed ? t("printer.printed") : t("printer.printed_unconfirmed")); } catch (err) { toast(t("printer.failed") + " " + err.message, "bad"); }
-    button.disabled = false;
+    button.disabled = false; button.textContent = label;
   };
   const sel = view.querySelector("#cmp");
   const table = view.querySelector("#cmp-table");
