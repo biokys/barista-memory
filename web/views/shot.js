@@ -2,6 +2,7 @@ import { t } from "../lib/i18n.js";
 import { api } from "../lib/api.js";
 import { fmt, toast, verdictText, verdictTone } from "../lib/fmt.js";
 import { shotChart } from "../lib/charts.js";
+import { mountChat, esc } from "../lib/assistant.js";
 
 function declineEnd(shot) {
   const d = (shot.phases || []).find((p) => p.name === "Decline");
@@ -69,6 +70,7 @@ export async function renderShot(view, [id]) {
     return;
   }
   const { context: c, machine: m, shot } = data;
+  const assistant = await api.assistantStatus();
   const readiness = m?.settledness == null ? null : m.settledness >= 85 ? "ok" : m.settledness >= 60 ? "warn" : "bad";
   const peak = shot?.summary?.pressure?.max_bar;
   const dec = shot ? declineEnd(shot) : null;
@@ -120,9 +122,13 @@ export async function renderShot(view, [id]) {
         <div class="card-head"><h2>${t("shot.rating")}</h2></div>
         <div class="row" id="stars" style="font-size:1.8rem;gap:4px;cursor:pointer">${[1,2,3,4,5].map((n) => `<span data-n="${n}" style="color:${(c.rating ?? 0) >= n ? "var(--accent)" : "var(--line-2)"}">★</span>`).join("")}</div>
         <div class="field" style="margin-top:12px"><label>${t("shot.note")}</label><textarea id="note" rows="3" placeholder="${t("shot.note_placeholder")}">${c.taste_note ?? ""}</textarea></div>
+        <div class="field" style="margin-top:12px"><label>${t("shot.caption")}</label>
+          <div class="row"><input id="caption" maxlength="160" value="${esc(data.caption?.text ?? "")}" placeholder="${t("shot.caption_placeholder")}" style="flex:1">${assistant.enabled ? `<button class="btn sm ghost" id="caption-suggest">${t("shot.caption_suggest")}</button>` : ""}</div>
+          <p class="faint small">${t("shot.caption_hint")}</p></div>
         <div class="row" style="margin-top:10px"><button class="btn primary sm" id="save">${t("shot.save")}</button></div>
       </section>
-    </div>`;
+    </div>
+    ${assistant.enabled ? `<section class="card"><div class="card-head"><h2>${t("shot.ask")}</h2><a class="small muted" href="#/ask">${t("nav.ask")} →</a></div><div id="chat"></div></section>` : ""}`;
 
   let rating = c.rating ?? 0;
   const stars = view.querySelector("#stars");
@@ -131,10 +137,39 @@ export async function renderShot(view, [id]) {
     rating = n === rating ? 0 : n;
     [...stars.children].forEach((el, i) => (el.style.color = rating > i ? "var(--accent)" : "var(--line-2)"));
   };
+  let savedCaption = data.caption?.text ?? "";
   view.querySelector("#save").onclick = async () => {
-    await api.rate(c.id, rating || null, view.querySelector("#note").value || null);
-    toast(t("shot.saved"));
+    try {
+      await api.rate(c.id, rating || null, view.querySelector("#note").value || null);
+      const caption = view.querySelector("#caption").value.trim();
+      if (caption !== savedCaption) { await api.setCaption(c.id, caption); savedCaption = caption; }
+      toast(t("shot.saved"));
+    } catch (err) { toast(String(err.message), "bad"); }
   };
+  view.querySelector("#caption-suggest")?.addEventListener("click", async (e) => {
+    const button = e.currentTarget; const label = button.textContent;
+    button.disabled = true; button.textContent = t("shot.caption_suggesting");
+    try {
+      const r = await api.suggestCaption(c.id);
+      view.querySelector("#caption").value = r.caption.text; savedCaption = r.caption.text;
+      toast(t("shot.caption_suggested"));
+    } catch (err) { toast(String(err.message), "bad"); }
+    button.disabled = false; button.textContent = label;
+  });
+  if (assistant.enabled) {
+    // The thread for this shot continues where it left off; the assistant's
+    // own caption lands in the field above without a reload.
+    const { conversations } = await api.conversations({ shot_id: c.id }).catch(() => ({ conversations: [] }));
+    mountChat(view.querySelector("#chat"), {
+      shotId: c.id,
+      conversationId: conversations[0]?.id ?? null,
+      onToolDone: async (name) => {
+        if (name !== "set_receipt_caption") return;
+        const fresh = await api.shot(c.id);
+        view.querySelector("#caption").value = fresh.caption?.text ?? ""; savedCaption = fresh.caption?.text ?? "";
+      },
+    });
+  }
 
   let destroy = null;
   const container = view.querySelector("#chart");

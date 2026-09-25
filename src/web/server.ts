@@ -18,6 +18,10 @@ import { currentConditions, powerSessions, allStateSamples, coldBaseline, type S
 import { massTemperatureSeries, settledness } from "../thermalModel.js";
 import { changeMode, SWITCHABLE_MODES } from "../machineControl.js";
 import { handleMcpRequest, mcpEnabled } from "../mcp/http.js";
+import { assistantEnabled, runTurn, type AssistantEvent } from "../assistant/chat.js";
+import { suggestCaption } from "../assistant/caption.js";
+import { listConversations, getConversation, createConversation, deleteConversation, messagesFor, displayMessages, usageSummary } from "../assistant/conversations.js";
+import { setCaption, CAPTION_MAX_CHARS } from "../captions.js";
 import { recordSetup, updateSetup } from "../setups.js";
 import { listCoffees, coffeeSummary, createCoffee, updateCoffee } from "../coffees.js";
 import { agingPoints, bags, currentStock, stockWarnG } from "../coffeeStats.js";
@@ -273,6 +277,79 @@ route("POST", "/api/shots/:id/rating", async (req, res, p) => {
       "ON CONFLICT(shot_id) DO UPDATE SET rating = excluded.rating, note = excluded.note"
   ).run(id, body.rating ?? null, body.note ?? null, Math.floor(Date.now() / 1000));
   json(res, 200, db.prepare("SELECT * FROM shot_context WHERE id = ?").get(id));
+});
+
+route("PUT", "/api/shots/:id/caption", async (req, res, p) => {
+  const body = await readJson(req);
+  try {
+    json(res, 200, { caption: setCaption(db, Number(p.id), String(body.text ?? ""), "user"), max_chars: CAPTION_MAX_CHARS });
+  } catch (error) {
+    json(res, 400, { error: "INVALID", message: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+route("POST", "/api/shots/:id/caption/suggest", async (_req, res, p) => {
+  const result = await suggestCaption(db, Number(p.id));
+  if (result.ok) return json(res, 200, result);
+  json(res, result.code === "ASSISTANT_OFF" ? 404 : result.code === "SHOT_NOT_FOUND" ? 404 : 502, { error: result.code, message: result.message });
+});
+
+// ---- assistant ----
+// The chat is served as Server-Sent Events over a POST: the answer streams
+// while tools run, and a plain fetch reads it, so nothing here needs a
+// WebSocket or a second port (and it passes through Home Assistant ingress).
+
+route("GET", "/api/assistant", async (_req, res) => {
+  json(res, 200, { enabled: assistantEnabled(), model: config.assistantModel, effort: config.assistantEffort, usage: usageSummary(db) });
+});
+
+route("GET", "/api/assistant/conversations", async (_req, res, _p, url) => {
+  const shotId = url.searchParams.get("shot_id");
+  json(res, 200, { conversations: listConversations(db, shotId ? Number(shotId) : null) });
+});
+
+route("POST", "/api/assistant/conversations", async (req, res) => {
+  const body = await readJson(req);
+  try {
+    json(res, 201, createConversation(db, body.shot_id != null ? Number(body.shot_id) : null));
+  } catch (error) {
+    json(res, 400, { error: "INVALID", message: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+route("GET", "/api/assistant/conversations/:id", async (_req, res, p) => {
+  const conversation = getConversation(db, Number(p.id));
+  if (!conversation) return json(res, 404, { error: "CONVERSATION_NOT_FOUND" });
+  json(res, 200, { conversation, messages: displayMessages(messagesFor(db, conversation.id)) });
+});
+
+route("DELETE", "/api/assistant/conversations/:id", async (_req, res, p) => {
+  json(res, deleteConversation(db, Number(p.id)) ? 200 : 404, { ok: true });
+});
+
+route("POST", "/api/assistant/conversations/:id/messages", async (req, res, p) => {
+  if (!assistantEnabled()) return json(res, 404, { error: "ASSISTANT_OFF", message: "Set GAGGIMATE_ANTHROPIC_KEY to enable the assistant" });
+  const body = await readJson(req);
+  const text = String(body.text ?? "").trim();
+  if (!text) return json(res, 400, { error: "EMPTY", message: "Nothing to send" });
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-store",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  const send = (event: AssistantEvent) => { if (!res.writableEnded) res.write(`data: ${JSON.stringify(event)}\n\n`); };
+  const abort = new AbortController();
+  req.on("close", () => abort.abort());
+  await runTurn(
+    db,
+    Number(p.id),
+    text,
+    { shotId: body.shot_id != null ? Number(body.shot_id) : null, lang: body.lang === "en" ? "en" : "cs" },
+    send,
+    abort.signal
+  );
+  res.end();
 });
 
 route("GET", "/api/setups", async (_req, res) => {

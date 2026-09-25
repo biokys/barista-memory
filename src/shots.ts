@@ -3,6 +3,7 @@ import type { ShotContextRow } from "./db/db.js";
 import { parseSlog } from "./device/client.js";
 import { transformShotForAI } from "./device/shotTransformer.js";
 import { cleanWeightSeries } from "./stableWeight.js";
+import { getCaption } from "./captions.js";
 
 /** The machine's thermal context for a shot, or null when the record started after it. */
 export function machineContextOf(context: ShotContextRow) {
@@ -43,7 +44,7 @@ export function loadArchivedShot(db: DatabaseSync, shotId: number, fullCurve: bo
     }
   }
 
-  return { context, machine: machineContextOf(context), shot };
+  return { context, machine: machineContextOf(context), shot, caption: getCaption(db, shotId) };
 }
 
 /**

@@ -11,6 +11,7 @@ import { maintenanceStatus } from "./maintenance.js";
 import { verdictFor } from "./dialin.js";
 import { getAnalysis } from "./anomaly.js";
 import { getSetting } from "./settings.js";
+import { getCaption } from "./captions.js";
 
 /**
  * A receipt for one shot, as a 384 px wide image: what a cat-printer class
@@ -188,6 +189,8 @@ export interface ReceiptOptions {
   web_url: string;
   show_chart: boolean;
   show_qr: boolean;
+  /** Ask the assistant for a caption on every new coffee, before the automatic print. */
+  auto_caption: boolean;
 }
 
 export function receiptOptions(db: DatabaseSync): ReceiptOptions {
@@ -199,6 +202,7 @@ export function receiptOptions(db: DatabaseSync): ReceiptOptions {
     web_url: getSetting(db, "web_url", config.webUrl).replace(/\/$/, ""),
     show_chart: getSetting(db, "receipt_chart", "1") === "1",
     show_qr: getSetting(db, "receipt_qr", "1") === "1",
+    auto_caption: getSetting(db, "receipt_auto_caption", "0") === "1",
   };
 }
 
@@ -303,6 +307,11 @@ export async function renderShotReceipt(db: DatabaseSync, shotId: number, lang: 
   if (phrase || flags.length) svg.rule();
   if (flags.length) svg.centered(`${t.watch}: ${flags.map((f) => t[f] ?? f).join(", ")}`, 15, 600);
   if (phrase) svg.centered(`${t.next}: ${phrase}`, 16, 600);
+
+  // The user's own line (or the assistant's), after the advice and before
+  // the housekeeping: it is about this cup, not about the machine.
+  const caption = getCaption(db, c.id);
+  if (caption) { svg.rule(); svg.centered(caption.text, 16); }
 
   const due = maintenanceStatus(db).filter((m) => m.enabled && m.state === "due");
   if (due.length) { svg.rule(); svg.centered(`${t.due} ${due.map((m) => t[m.key] ?? m.key).join(", ")}`, 15, 600); }

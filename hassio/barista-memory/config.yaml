@@ -1,5 +1,5 @@
 name: Barista Memory
-version: "0.4.14"
+version: "0.5.0"
 slug: barista_memory
 description: Shot archive and brewing context for a GaggiMate espresso machine
 url: https://github.com/biokys/barista-memory
@@ -32,6 +32,8 @@ options:
   mqtt_user: ""
   mqtt_password: ""
   mcp_token: ""
+  anthropic_api_key: ""
+  assistant_model: "claude-opus-5"
 schema:
   machine_host: str
   poll_interval: int(5,600)
@@ -41,3 +43,5 @@ schema:
   mqtt_user: str?
   mqtt_password: password?
   mcp_token: password?
+  anthropic_api_key: password?
+  assistant_model: str?

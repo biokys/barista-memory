@@ -9,10 +9,11 @@ import { toast } from "../lib/fmt.js";
  */
 export async function renderSettings(view) {
   const load = async () => {
-    const [printer, latest, stock] = await Promise.all([
+    const [printer, latest, stock, assistant] = await Promise.all([
       api.printer().catch(() => null),
       api.shots({ limit: 1 }).catch(() => ({ shots: [] })),
       api.preferences().catch(() => null),
+      api.assistantUsage().catch(() => ({ enabled: false })),
     ]);
     const ps = printer?.settings;
     const rc = ps?.receipt;
@@ -54,11 +55,23 @@ export async function renderSettings(view) {
               <label class="row"><input type="checkbox" id="rc-chart" ${rc.show_chart ? "checked" : ""}> ${t("receipt.show_chart")}</label>
               <label class="row"><input type="checkbox" id="rc-qr" ${rc.show_qr ? "checked" : ""}> ${t("receipt.show_qr")}</label>
             </div>
+            ${assistant.enabled ? `<label class="row"><input type="checkbox" id="rc-auto-caption" ${rc.auto_caption ? "checked" : ""}> ${t("receipt.auto_caption")}</label>
+            <p class="faint small">${t("receipt.auto_caption_hint")}</p>` : ""}
             <div class="row"><button class="btn primary sm" id="rc-save">${t("printer.save")}</button></div>
           </div>
         </section>` : ""}
         </div>
         <div class="col">
+        <section class="card">
+          <div class="card-head"><h2>${t("assistant.title")}</h2>${assistant.enabled ? `<span class="pill ok">${t("assistant.on")}</span>` : `<span class="pill">${t("assistant.off")}</span>`}</div>
+          ${assistant.enabled ? `
+            <dl class="kv">
+              <dt>${t("assistant.model")}</dt><dd class="num">${assistant.model} <span class="muted">· ${t("assistant.effort")} ${assistant.effort}</span></dd>
+              ${["today", "month"].map((w) => { const u = assistant.usage[w]; return `<dt>${t("assistant." + w)}</dt><dd class="num">${t("assistant.calls", { n: u.calls })} · ${t("assistant.tokens", { in: (u.usage.input_tokens + u.usage.cache_read_tokens + u.usage.cache_write_tokens).toLocaleString(), out: u.usage.output_tokens.toLocaleString() })}${u.cost_usd != null ? ` · <b>$${u.cost_usd.toFixed(2)}</b>` : ` · ${t("assistant.cost_unknown")}`}</dd>`; }).join("")}
+            </dl>
+            <p class="faint small" style="margin-top:10px">${t("assistant.hint")}</p>`
+          : `<p class="muted small">${t("assistant.off_hint")}</p>`}
+        </section>
         ${rc ? `<section class="card">
           <div class="card-head"><h2>${t("receipt.preview")}</h2>${lastId ? `<a class="btn sm ghost" href="api/shots/${lastId}/receipt.png" target="_blank" rel="noopener">PNG</a>` : ""}</div>
           ${lastId ? `<img id="rc-preview" class="receipt-preview" src="api/shots/${lastId}/receipt.png?ts=${Date.now()}" alt="">` : `<p class="empty">${t("now.none")}</p>`}
@@ -165,6 +178,7 @@ export async function renderSettings(view) {
           web_url: view.querySelector("#rc-url").value,
           show_chart: view.querySelector("#rc-chart").checked,
           show_qr: view.querySelector("#rc-qr").checked,
+          ...(view.querySelector("#rc-auto-caption") ? { auto_caption: view.querySelector("#rc-auto-caption").checked } : {}),
         });
         toast(t("printer.saved")); load();
       } catch (err) { toast(String(err.message), "bad"); }

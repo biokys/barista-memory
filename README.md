@@ -238,8 +238,31 @@ points (`record_event`, `list_events`), machine cleaning
 (`maintenance_status`, `record_maintenance`), the machine (`machine_now`,
 `machine_timeline`, `machine_temperature_history`, `get_machine_settings`,
 `list_profiles`, `get_profile`, `save_profile`, `select_profile`,
-`set_machine_mode`) and the archive's own upkeep
-(`ingest_now`, `recompute_stable_weights`, `recompute_machine_context`).
+`set_machine_mode`), the receipt (`print_receipt`, `set_receipt_caption`)
+and the archive's own upkeep (`ingest_now`, `recompute_stable_weights`,
+`recompute_machine_context`).
+
+### The assistant in the app
+
+With `GAGGIMATE_ANTHROPIC_KEY` set (add-on option `anthropic_api_key`), the
+web UI grows an *Ask* tab and a chat under every shot: ask what went wrong
+with this pull, how the coffee has aged, what to change next. The assistant
+is Claude calling the same tools the MCP serves — it looks the data up
+itself and the chat shows what it looked at — minus those that change the
+machine or rewrite the archive (profiles, mode, imports, recomputes), since
+the web UI has no login. Threads are kept in the archive, so a conversation
+started on the phone continues on the laptop. `GAGGIMATE_ASSISTANT_MODEL`
+picks the model (`claude-opus-5` by default; `claude-sonnet-5` is cheaper),
+`GAGGIMATE_ASSISTANT_EFFORT` the reasoning depth. Settings shows the tokens
+and an estimated cost for today and the last 30 days; the key stays in the
+environment and never enters the database or an export.
+
+The receipt gets a caption too: a line of your own on the shot page ("for
+Klára", "first of the new bag"), one the assistant writes on request —
+in the chat, or with *Suggest* next to the field — or, when *A caption from
+the assistant on every new coffee* is on in Settings, one per shot before
+the automatic print. That call has a 20 s budget; without an answer the
+receipt prints without a caption, never late.
 
 ### Day to day, from a laptop
 
@@ -410,5 +433,8 @@ transition must not reset the description or the selected flag.
 | `GAGGIMATE_PRINTER_MAC` | unset | Bluetooth address of the receipt printer (the UI can override it). |
 | `GAGGIMATE_LANG` | `en` | Receipt language, `cs` or `en`. |
 | `GAGGIMATE_WEB_URL` | unset | Public base URL of the web UI; receipts then carry a QR code to the shot. |
+| `GAGGIMATE_ANTHROPIC_KEY` | unset | Anthropic API key; set, it enables the in-app assistant and receipt captions. `ANTHROPIC_API_KEY` is read too. |
+| `GAGGIMATE_ASSISTANT_MODEL` | `claude-opus-5` | Claude model for the assistant and captions. |
+| `GAGGIMATE_ASSISTANT_EFFORT` | `medium` | Reasoning effort for chat turns: `low`, `medium`, `high`, `xhigh` or `max`. |
 | `GAGGIMATE_TAU_HEAT_MIN` | `20` | Thermal model: minutes for the group to warm; tune with `cli calibrate`. |
 | `GAGGIMATE_ROOM_TEMP_C` | `22` | Thermal model: where a cold machine starts. |

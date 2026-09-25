@@ -8,6 +8,8 @@ import { startStatusStream } from "./device/statusStream.js";
 import { createFlushWatcher } from "./flushWatch.js";
 import { startMqtt, type MqttBridge } from "./mqtt.js";
 import { printShot, printerSettings } from "./printer/index.js";
+import { suggestCaption } from "./assistant/caption.js";
+import { assistantEnabled } from "./assistant/chat.js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -89,9 +91,17 @@ async function main(): Promise<void> {
     try { mqttBridge?.publish(db, live); } catch (error) { console.error(`mqtt publish failed: ${error instanceof Error ? error.message : error}`); }
 
     // A receipt for every new coffee, when the printer is set up for it.
-    // Flushes are not coffees and get none.
-    if (newCoffees.length && printerSettings(db).print_each_shot) {
+    // Flushes are not coffees and get none. The caption comes first when it
+    // is wanted, bounded by its own timeout: the print never waits on the
+    // cloud, a receipt without a caption is still a receipt.
+    if (newCoffees.length) {
+      const settings = printerSettings(db);
       for (const id of newCoffees) {
+        if (settings.receipt.auto_caption && assistantEnabled()) {
+          const caption = await suggestCaption(db, id);
+          console.log(caption.ok ? `caption for shot ${id}: ${caption.caption.text}` : `no caption for shot ${id}: ${caption.message}`);
+        }
+        if (!settings.print_each_shot) continue;
         const result = await printShot(db, id);
         console.log(result.ok ? `printed receipt for shot ${id}` : `receipt for shot ${id} not printed: ${result.message}`);
       }

@@ -14,6 +14,7 @@ import { renderCoffees } from "./views/coffees.js";
 import { renderEvents } from "./views/events.js";
 import { renderProfiles } from "./views/profiles.js";
 import { renderSettings } from "./views/settings.js";
+import { renderAsk } from "./views/ask.js";
 
 const routes = [
   { path: /^#\/?$/, view: renderNow, nav: "now" },
@@ -25,17 +26,21 @@ const routes = [
   { path: /^#\/coffees(?:\/(\d+))?\/?$/, view: renderCoffees, nav: "coffees" },
   { path: /^#\/events\/?$/, view: renderEvents, nav: "events" },
   { path: /^#\/settings\/?$/, view: renderSettings, nav: "settings" },
+  { path: /^#\/ask\/?$/, view: renderAsk, nav: "ask" },
   { path: /^#\/profiles(?:\/([^/]+))?\/?$/, view: renderProfiles, nav: "profiles" },
 ];
 
-const NAV = ["now", "history", "machine", "stats", "setup", "coffees", "events", "profiles", "settings"];
-const NAV_HREF = { now: "#/", history: "#/shots", machine: "#/machine", stats: "#/stats", setup: "#/setup", coffees: "#/coffees", events: "#/events", profiles: "#/profiles", settings: "#/settings" };
+const NAV = ["now", "history", "machine", "stats", "setup", "coffees", "events", "profiles", "ask", "settings"];
+const NAV_HREF = { now: "#/", history: "#/shots", machine: "#/machine", stats: "#/stats", setup: "#/setup", coffees: "#/coffees", events: "#/events", profiles: "#/profiles", ask: "#/ask", settings: "#/settings" };
+// The assistant's tab exists only where it is configured; a tab that says
+// "set a key first" would be clutter for everyone else.
+let navItems = NAV.filter((k) => k !== "ask");
 
 let cleanup = null;
 
 function renderNav(active) {
   const nav = document.getElementById("nav");
-  nav.innerHTML = NAV.map((k) => `<a href="${NAV_HREF[k]}" class="${k === active ? "active" : ""}">${t("nav." + k)}</a>`).join("");
+  nav.innerHTML = navItems.map((k) => `<a href="${NAV_HREF[k]}" class="${k === active ? "active" : ""}">${t("nav." + k)}</a>`).join("");
 }
 
 async function navigate() {
@@ -141,6 +146,7 @@ if (INGRESS) {
 }
 
 await initI18n();
+if ((await api.assistantStatus()).enabled) navItems = NAV;
 document.getElementById("lang").textContent = currentLang().toUpperCase();
 document.getElementById("theme").title = t("theme.title");
 document.documentElement.lang = currentLang();

@@ -269,3 +269,50 @@ CREATE TABLE IF NOT EXISTS machine_state (
 );
 
 CREATE INDEX IF NOT EXISTS machine_state_reachable ON machine_state (reachable, sampled_at);
+
+-- A line of the user's (or the assistant's) own on the printed receipt: "for
+-- Klára", "first shot of the new bag". Separate from tastings.note, which is
+-- written after the cup is drunk — by then the receipt has been printed.
+CREATE TABLE IF NOT EXISTS shot_captions (
+  shot_id    INTEGER PRIMARY KEY REFERENCES shots (id) ON DELETE CASCADE,
+  text       TEXT NOT NULL,
+  source     TEXT NOT NULL CHECK (source IN ('user', 'assistant')),
+  created_at INTEGER NOT NULL
+);
+
+-- Conversations with the in-app assistant. Messages are stored exactly as
+-- they go to the API (content blocks, tool calls and results included), so a
+-- thread can be continued from any browser; `text` is what the user typed,
+-- without the context line the server prepends for the model.
+CREATE TABLE IF NOT EXISTS conversations (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  shot_id    INTEGER REFERENCES shots (id) ON DELETE SET NULL,
+  title      TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS conversation_messages (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id INTEGER NOT NULL REFERENCES conversations (id) ON DELETE CASCADE,
+  role            TEXT NOT NULL CHECK (role IN ('user', 'assistant')),
+  content         TEXT NOT NULL,   -- JSON array of API content blocks
+  text            TEXT,            -- the user's own words; NULL for tool results
+  created_at      INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS conversation_messages_conversation ON conversation_messages (conversation_id, id);
+
+-- Token counts per API call, so the cost of the assistant is visible in the
+-- UI rather than only on the invoice.
+CREATE TABLE IF NOT EXISTS assistant_usage (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id   INTEGER,        -- NULL for a receipt caption
+  purpose           TEXT NOT NULL,  -- chat | caption
+  model             TEXT NOT NULL,
+  input_tokens      INTEGER NOT NULL,
+  cache_read_tokens INTEGER NOT NULL,
+  cache_write_tokens INTEGER NOT NULL,
+  output_tokens     INTEGER NOT NULL,
+  created_at        INTEGER NOT NULL
+);

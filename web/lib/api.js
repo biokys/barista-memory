@@ -12,6 +12,8 @@ async function call(method, path, body) {
   return data;
 }
 
+let assistantStatus = null;
+
 export const api = {
   now: () => call("GET", "api/now"),
   shots: (q = {}) => call("GET", "api/shots?" + new URLSearchParams(q)),
@@ -58,4 +60,32 @@ export const api = {
   lastFlushWasCafiza: () => call("POST", "api/maintenance/last-flush/cafiza"),
   updateMaintenanceType: (key, change) => call("PATCH", `api/maintenance/types/${key}`, change),
   deleteMaintenanceLog: (id) => call("DELETE", `api/maintenance/log/${id}`),
+  setCaption: (id, text) => call("PUT", `api/shots/${id}/caption`, { text }),
+  suggestCaption: (id) => call("POST", `api/shots/${id}/caption/suggest`),
+  // Asked once per page load: whether the assistant is configured decides
+  // which cards and which nav item exist at all.
+  assistantStatus: () => (assistantStatus ??= call("GET", "api/assistant").catch(() => ({ enabled: false }))),
+  assistantUsage: () => call("GET", "api/assistant"),
+  conversations: (q = {}) => call("GET", "api/assistant/conversations?" + new URLSearchParams(q)),
+  conversation: (id) => call("GET", `api/assistant/conversations/${id}`),
+  createConversation: (body = {}) => call("POST", "api/assistant/conversations", body),
+  deleteConversation: (id) => call("DELETE", `api/assistant/conversations/${id}`),
+  /** One chat turn: the answer arrives as Server-Sent Events, one JSON object per event. */
+  streamMessage: async (id, body, onEvent) => {
+    const res = await fetch(`api/assistant/conversations/${id}/messages`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.message || data.error || `${res.status}`); }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let end;
+      while ((end = buffer.indexOf("\n\n")) >= 0) {
+        const chunk = buffer.slice(0, end); buffer = buffer.slice(end + 2);
+        for (const line of chunk.split("\n")) if (line.startsWith("data: ")) onEvent(JSON.parse(line.slice(6)));
+      }
+    }
+  },
 };

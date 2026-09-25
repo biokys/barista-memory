@@ -212,6 +212,26 @@ entry point (daemon + web in one process, HA `options.json` mapped onto the
 `GAGGIMATE_*` variables); the systemd deployment still runs the two services
 separately and is unaffected.
 
+**The in-app assistant calls `callTool()` from `src/mcp/tools.ts`, the same
+function the MCP serves.** `src/assistant/tools.ts` only adapts the schema
+field name and withholds the tools that change the machine or rewrite the
+archive (the web UI has no login). Put a new capability in `TOOLS` and the
+switch in `callTool`, never in the assistant; the chat and Claude Code then
+get it together. The system prompt (`src/assistant/prompt.ts`) is
+byte-stable on purpose — the date, the open shot and the languages go into
+the context block of each user turn — because prompt caching is a prefix
+match and a timestamp in the system prompt would void it every request.
+Messages are stored whole (`conversation_messages.content`), thinking
+blocks included: they must be replayed unchanged when a turn continues
+after a tool call. The API key lives only in the environment
+(`GAGGIMATE_ANTHROPIC_KEY`): the `settings` table travels with every export.
+
+**A receipt caption never delays a print.** `suggestCaption()` is one call
+with structured output and its own timeout (`AUTO_CAPTION_TIMEOUT_MS`); the
+daemon logs a miss and prints without. Auto-captions are off by default —
+the user asked for no machine-written text on receipts before the chat
+existed (2026-09-22); they turned it into an opt-in on 2026-09-25.
+
 **The web UI and the MCP share every code path.** `src/web/server.ts` is a
 thin JSON translation of `shots.ts`, `profiles.ts`, `stats.ts`, `events.ts`,
 `setups.ts` and `machineState.ts`; the MCP calls the same functions. Put
