@@ -198,6 +198,8 @@ textarea { width: 100%; resize: vertical; }
 .field input, .field select, .field textarea { background-color: var(--bg-2); border: 1px solid var(--line-2); border-radius: var(--radius-s); padding: 10px 12px; outline: none; width: 100%; }
 .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217,160,102,.15); }
 .field input[type=range] { padding: 0; background-color: transparent; border: none; accent-color: var(--accent); }
+/* Checkboxes sit outside .field, so the slider rule above never reached them and they kept the browser blue. */
+input[type=checkbox], input[type=radio] { accent-color: var(--accent); }
 .field .range-v { font-size: 1.6rem; font-weight: 580; letter-spacing: -0.02em; }
 .btn { background-color: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--radius-s); padding: 10px 16px; cursor: pointer; font-weight: 520; transition: .15s; }
 .btn:hover { border-color: var(--accent); }
