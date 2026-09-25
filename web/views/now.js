@@ -78,12 +78,29 @@ function planner(m) {
   return `<div class="row small muted" style="margin-top:12px;gap:8px"><label class="row" style="gap:6px">${t("machine.coffee_at")} <input type="time" id="coffee-at" value="${at}" style="width:auto"></label>${advice ? `<span class="pill">${advice}</span>` : `<span class="faint">${t("machine.from_cold", { minutes: m.minutes_to_ready_from_cold })}</span>`}</div>`;
 }
 
+function shotRow(shot) {
+  return `
+    <a class="shot-row" href="#/shots/${shot.id}">
+      ${sparkline(shot.sparkline)}
+      <div class="main">
+        <div class="title"><b>#${shot.id}</b><span class="muted">${shot.profile_name ?? ""}</span><span class="faint">${fmt.dateTime(shot.started_at)}</span></div>
+        <div class="meta">${shot.bean ?? "–"} · ${t("now.grind")} ${shot.grind_setting ?? "–"} · ${fmt.stars(shot.rating)}</div>
+      </div>
+      <div class="nums num">
+        <span><b>${fmt.seconds(shot.duration_ms / 1000)}</b><i>${t("shot.time")}</i></span>
+        <span><b>${fmt.g(shot.stable_weight_g)}</b><i>${t("shot.cup")}</i></span>
+        <span><b>${fmt.ratio(shot.ratio)}</b><i>${t("shot.ratio")}</i></span>
+        <span><b>${fmt.pct(shot.machine_settledness)}</b><i>${t("shot.machine")}</i></span>
+      </div>
+    </a>`;
+}
+
 /** The modes a person can switch to from here; grind is the grinder's business. */
 const MODES = ["standby", "brew", "steam", "water"];
 
 export async function renderNow(view) {
   const draw = (now) => {
-    const m = now.machine, s = now.setup, last = now.last_shot;
+    const m = now.machine, s = now.setup, recent = now.recent_shots ?? [];
     const r = readiness(m.settledness, m.reachable);
     view.innerHTML = `
       <div class="hero">
@@ -126,21 +143,8 @@ export async function renderNow(view) {
         ${now.maintenance.map((m) => `<span class="maint-chip ${tone(m)}"><b>${t("maint.type." + m.key)}</b><span class="num">${usage(m)}</span></span>`).join("")}
       </a>` : ""}
       <section class="card">
-        <div class="card-head"><h2>${t("now.last_shot")}</h2>${last ? `<a class="btn sm ghost" href="#/shots/${last.id}">${t("now.open")}</a>` : ""}</div>
-        ${last ? `
-          <a class="shot-row" href="#/shots/${last.id}">
-            ${sparkline(last.sparkline)}
-            <div class="main">
-              <div class="title"><b>#${last.id}</b><span class="muted">${last.profile_name ?? ""}</span><span class="faint">${fmt.dateTime(last.started_at)}</span></div>
-              <div class="meta">${last.bean ?? "–"} · ${t("now.grind")} ${last.grind_setting ?? "–"} · ${fmt.stars(last.rating)}</div>
-            </div>
-            <div class="nums num">
-              <span><b>${fmt.seconds(last.duration_ms / 1000)}</b><i>${t("shot.time")}</i></span>
-              <span><b>${fmt.g(last.stable_weight_g)}</b><i>${t("shot.cup")}</i></span>
-              <span><b>${fmt.ratio(last.ratio)}</b><i>${t("shot.ratio")}</i></span>
-              <span><b>${fmt.pct(last.machine_settledness)}</b><i>${t("shot.machine")}</i></span>
-            </div>
-          </a>` : `<p class="empty">${t("now.none")}</p>`}
+        <div class="card-head"><h2>${t("now.recent_shots")}</h2>${recent.length ? `<a class="btn sm ghost" href="#/shots">${t("now.all_shots")}</a>` : ""}</div>
+        ${recent.length ? `<div class="list">${recent.map(shotRow).join("")}</div>` : `<p class="empty">${t("now.none")}</p>`}
       </section>`;
   };
   let latest = null;

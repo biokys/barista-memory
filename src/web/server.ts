@@ -54,6 +54,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, "..", "..");
 const WEB = join(ROOT, "web");
 const PORT = Number(process.env.GAGGIMATE_WEB_PORT ?? 8080);
+/** How many of the latest shots the home page shows. */
+const RECENT_SHOTS = 3;
 const HOST = process.env.GAGGIMATE_WEB_HOST ?? "0.0.0.0";
 
 const db = openDatabase(config.databasePath);
@@ -143,9 +145,11 @@ route("GET", "/api/now", async (_req, res) => {
   const live = await liveStatus();
   const conditions = currentConditions(db, live);
   const setup = currentSetup(db);
-  const last = db.prepare("SELECT * FROM shot_context ORDER BY started_at DESC LIMIT 1").get() as unknown as
-    | ShotContextRow
-    | undefined;
+  const recent = db
+    .prepare("SELECT * FROM shot_context ORDER BY started_at DESC LIMIT ?")
+    .all(RECENT_SHOTS) as unknown as ShotContextRow[];
+  const last = recent[0];
+  const withSparkline = (shot: ShotContextRow) => ({ ...shot, sparkline: pressureSparkline(db, shot.id), flags: getAnalysis(db, shot.id)?.flags ?? [] });
   json(res, 200, {
     machine: conditions,
     setup,
@@ -157,7 +161,9 @@ route("GET", "/api/now", async (_req, res) => {
       verdict: last ? verdictFor(db, last) : null,
     },
     maintenance: maintenanceStatus(db).filter((m) => m.enabled),
-    last_shot: last ? { ...last, sparkline: pressureSparkline(db, last.id), flags: getAnalysis(db, last.id)?.flags ?? [] } : null,
+    // last_shot stays for MQTT and the dial-in verdict; the home page lists recent_shots.
+    last_shot: last ? withSparkline(last) : null,
+    recent_shots: recent.map(withSparkline),
     server_time: Math.floor(Date.now() / 1000),
   });
 });
