@@ -4,6 +4,7 @@ import { parseSlog } from "./device/client.js";
 import { extractionEndIndex, transformShotForAI } from "./device/shotTransformer.js";
 import { cleanWeightSeries } from "./stableWeight.js";
 import { phasePlan, preinfusionPhasesOf, snapshotForShot, type PlannedPhase } from "./profileSnapshots.js";
+import { getCaption } from "./captions.js";
 
 /** The machine's thermal context for a shot, or null when the record started after it. */
 export function machineContextOf(context: ShotContextRow) {
@@ -54,7 +55,7 @@ export function loadArchivedShot(db: DatabaseSync, shotId: number, fullCurve: bo
   const profileSnapshot = snapshot
     ? { id: snapshot.id, profile_id: snapshot.profile_id, label: snapshot.label, content_hash: snapshot.content_hash, first_seen_at: snapshot.first_seen_at }
     : null;
-  return { context, machine: machineContextOf(context), shot, device_notes: deviceNotes, profile_snapshot: profileSnapshot, phase_plan: phasePlanned };
+  return { context, machine: machineContextOf(context), shot, device_notes: deviceNotes, profile_snapshot: profileSnapshot, phase_plan: phasePlanned, caption: getCaption(db, shotId) };
 }
 
 /**

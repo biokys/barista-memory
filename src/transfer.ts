@@ -15,7 +15,7 @@ import { openDatabase } from "./db/db.js";
  */
 
 /** Tables whose rows travel; everything derived lives in views. */
-const TABLES = ["shots", "setups", "shot_overrides", "tastings", "notes_sync", "machine_state", "events", "maintenance_types", "maintenance_log", "settings"];
+const TABLES = ["shots", "setups", "shot_overrides", "tastings", "notes_sync", "machine_state", "events", "maintenance_types", "maintenance_log", "settings", "shot_captions", "conversations", "conversation_messages", "assistant_usage"];
 
 export function exportArchive(db: DatabaseSync): Uint8Array {
   const dir = mkdtempSync(join(tmpdir(), "barista-export-"));

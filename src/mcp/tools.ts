@@ -23,18 +23,29 @@ import { exportSetupCard, importSetupCard } from "../setupCard.js";
 import { getCoffee } from "../coffees.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "../ingest.js";
 import { powerSessions, currentConditions, MODE_NAMES } from "../machineState.js";
+import { setCaption, CAPTION_MAX_CHARS } from "../captions.js";
 
-const MCP_VERSION = "0.4.9";
+const MCP_VERSION = "0.5.0";
 
-function ok(payload: unknown) {
+/** One tool call's outcome, in the MCP's own shape; the assistant reads the same object. */
+export interface ToolResult {
+  // The index signature is what the MCP SDK's result type requires.
+  [key: string]: unknown;
+  content: [{ type: "text"; text: string }];
+  isError?: boolean;
+}
+
+export type ToolArgs = Record<string, unknown> | undefined;
+
+function ok(payload: unknown): ToolResult {
   return { content: [{ type: "text" as const, text: JSON.stringify(payload) }] };
 }
 
-function fail(message: string, code: string) {
-  return ok({ error: true, message, code });
+function fail(message: string, code: string): ToolResult {
+  return { ...ok({ error: true, message, code }), isError: true };
 }
 
-const TOOLS: Tool[] = [
+export const TOOLS: Tool[] = [
   {
     name: "get_current_setup",
     description:
@@ -389,6 +400,21 @@ const TOOLS: Tool[] = [
     },
   },
   {
+    name: "set_receipt_caption",
+    description:
+      "Put a line of text on the shot's printed receipt — who the coffee was for, what was special about it, a " +
+      `one-sentence summary. At most ${CAPTION_MAX_CHARS} characters, printed centred on a 58 mm strip; an empty text removes it. ` +
+      "Reprinting the receipt picks it up.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        shot_id: { type: "number", description: "Shot id" },
+        text: { type: "string", description: `The caption, up to ${CAPTION_MAX_CHARS} characters; empty removes it` },
+      },
+      required: ["shot_id", "text"],
+    },
+  },
+  {
     name: "set_shot_override",
     description:
       "Record that one shot deviated from the setup — a different dose or grind for that pull only. " +
@@ -444,18 +470,12 @@ const TOOLS: Tool[] = [
 ];
 
 /**
- * The MCP server over any transport. Built per connection: stdio makes one
- * for its lifetime, the HTTP endpoint one per request (stateless), both
- * against the same database handle the caller owns.
+ * Run one tool by name. This is the whole behaviour of the MCP, kept apart
+ * from its transport so the in-app assistant calls the very same code and
+ * the two cannot drift; an unknown tool or a thrown error come back as a
+ * failed result, never as an exception.
  */
-export function createMcpServer(db: DatabaseSync): Server {
-const server = new Server({ name: "barista-memory", version: MCP_VERSION }, { capabilities: { tools: {} } });
-
-server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
-
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-
+export async function callTool(db: DatabaseSync, name: string, args: ToolArgs): Promise<ToolResult> {
   try {
     switch (name) {
       case "get_current_setup": {
@@ -716,6 +736,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return ok({ shot: db.prepare("SELECT * FROM shot_context WHERE id = ?").get(shotId) });
       }
 
+      case "set_receipt_caption": {
+        try {
+          const caption = setCaption(db, Number(args?.shot_id), String(args?.text ?? ""), "assistant");
+          return ok({ shot_id: Number(args?.shot_id), caption, message: caption ? "Caption stored; it prints on the next receipt" : "Caption removed" });
+        } catch (error) {
+          return fail(error instanceof Error ? error.message : String(error), "INVALID");
+        }
+      }
+
       case "set_shot_override": {
         const shotId = args!.shot_id as number;
         if (!db.prepare("SELECT 1 FROM shots WHERE id = ?").get(shotId)) {
@@ -756,7 +785,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   } catch (error) {
     return fail(error instanceof Error ? error.message : String(error), "TOOL_FAILED");
   }
-});
+}
 
-return server;
+/**
+ * The MCP server over any transport. Built per connection: stdio makes one
+ * for its lifetime, the HTTP endpoint one per request (stateless), both
+ * against the same database handle the caller owns.
+ */
+export function createMcpServer(db: DatabaseSync): Server {
+  const server = new Server({ name: "barista-memory", version: MCP_VERSION }, { capabilities: { tools: {} } });
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+  server.setRequestHandler(CallToolRequestSchema, async (request) => callTool(db, request.params.name, request.params.arguments));
+  return server;
 }

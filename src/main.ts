@@ -25,6 +25,8 @@ const OPTION_TO_ENV: Record<string, string> = {
   printer_mac: "GAGGIMATE_PRINTER_MAC",
   language: "GAGGIMATE_LANG",
   web_url: "GAGGIMATE_WEB_URL",
+  anthropic_api_key: "GAGGIMATE_ANTHROPIC_KEY",
+  assistant_model: "GAGGIMATE_ASSISTANT_MODEL",
 };
 
 /**

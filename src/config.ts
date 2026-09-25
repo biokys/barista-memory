@@ -9,6 +9,12 @@ function required(name: string): string {
   return value;
 }
 
+const EFFORTS = ["low", "medium", "high", "xhigh", "max"] as const;
+export type Effort = (typeof EFFORTS)[number];
+function effortOf(value: string | undefined): Effort {
+  return (EFFORTS as readonly string[]).includes(value ?? "") ? (value as Effort) : "medium";
+}
+
 export const config = {
   /** GaggiMate hostname or IP. Prefer an IP: resolving .local can take seconds. */
   deviceHost: process.env.GAGGIMATE_HOST ?? "gaggimate.local",
@@ -40,7 +46,18 @@ export const config = {
   printerMac: process.env.GAGGIMATE_PRINTER_MAC ?? "",
   /** Warm-up percent at which the "ready" sensor turns on. */
   readyPct: Number(process.env.GAGGIMATE_READY_PCT ?? 85),
+  /**
+   * Anthropic API key for the in-app assistant; unset = the assistant is off
+   * and the UI hides it. Kept in the environment, never in the settings
+   * table: that table travels with every export of the archive.
+   */
+  anthropicApiKey: process.env.GAGGIMATE_ANTHROPIC_KEY ?? process.env.ANTHROPIC_API_KEY ?? "",
+  /** Claude model the assistant and the receipt captions use. */
+  assistantModel: process.env.GAGGIMATE_ASSISTANT_MODEL ?? "claude-opus-5",
+  /** Reasoning effort for chat turns; captions always run at "low". */
+  assistantEffort: effortOf(process.env.GAGGIMATE_ASSISTANT_EFFORT),
 } as const;
+
 
 export const httpBase = `${config.deviceProtocol === "wss" ? "https" : "http"}://${config.deviceHost}`;
 export const wsUrl = `${config.deviceProtocol}://${config.deviceHost}/ws`;

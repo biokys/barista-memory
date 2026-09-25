@@ -32,7 +32,7 @@ export function printerSettings(db: DatabaseSync): PrinterSettings {
 
 type SettingsChange = Partial<{
   mac: string | null; print_each_shot: boolean; intensity: number; lang: string;
-  cafe_name: string; cafe_tagline: string; thanks: string; greetings: string; web_url: string; show_chart: boolean; show_qr: boolean;
+  cafe_name: string; cafe_tagline: string; thanks: string; greetings: string; web_url: string; show_chart: boolean; show_qr: boolean; auto_caption: boolean;
 }>;
 
 export function updatePrinterSettings(db: DatabaseSync, change: SettingsChange): PrinterSettings {
@@ -44,6 +44,7 @@ export function updatePrinterSettings(db: DatabaseSync, change: SettingsChange):
   text("web_url", change.web_url);
   if (change.show_chart !== undefined) setSetting(db, "receipt_chart", change.show_chart ? "1" : "0");
   if (change.show_qr !== undefined) setSetting(db, "receipt_qr", change.show_qr ? "1" : "0");
+  if (change.auto_caption !== undefined) setSetting(db, "receipt_auto_caption", change.auto_caption ? "1" : "0");
   if (change.mac !== undefined) setSetting(db, "printer_mac", change.mac ? change.mac.trim().toUpperCase() : null);
   if (change.print_each_shot !== undefined) setSetting(db, "print_each_shot", change.print_each_shot ? "1" : "0");
   if (change.intensity !== undefined) setSetting(db, "print_intensity", String(Math.max(0, Math.min(255, Math.round(change.intensity)))));
