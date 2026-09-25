@@ -206,7 +206,9 @@ export function machineChart(container, samples, shots, sessions, events = [], m
     legend: { show: false },
     // Down to 5 °C: the cold level the machine reports is room minus its
     // temperature offset, 14 °C here, and the model rests there overnight.
-    scales: { x: { time: true }, y: { range: [5, 105] }, pct: { range: [0, 100] } },
+    // The top follows the data: brewing stays under 105 °C, but a steam
+    // session reads 140 °C and more, and a fixed ceiling cut it off.
+    scales: { x: { time: true }, y: { range: (u, min, max) => [5, Number.isFinite(max) ? Math.max(105, Math.ceil(max / 10) * 10 + 5) : 105] }, pct: { range: [0, 100] } },
     axes: [
       axis({ scale: "x" }),
       axis({ scale: "y", values: (u, v) => v.map((n) => n + "°") }),
