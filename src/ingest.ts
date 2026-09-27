@@ -113,9 +113,18 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
   const entries = await fetchIndex();
   const live = entries.filter((entry) => !entry.deleted);
 
-  const known = new Set(
-    (db.prepare("SELECT id FROM shots").all() as Array<{ id: number }>).map((row) => row.id)
+  const known = new Map(
+    (db.prepare("SELECT id, incomplete FROM shots").all() as Array<{ id: number; incomplete: number }>).map(
+      (row) => [row.id, row.incomplete === 1]
+    )
   );
+  // The index lists a shot as soon as recording starts, flagged incomplete and
+  // with an empty .slog until it ends. Shot 33 was archived 16 s into the pull
+  // with no curve at all. The newest incomplete entry is taken to be still
+  // recording and waits for a later pass; an older one was cut short (power
+  // lost mid-shot) and is archived as it is. Clock-independent on purpose:
+  // the device's timestamps read 1970 until it has synced its time.
+  const newestId = live.reduce((max, entry) => Math.max(max, entry.id), -1);
 
   const result: IngestResult = {
     onDevice: live.length,
@@ -145,11 +154,37 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
   const fresh: number[] = [];
   let sawNew = false;
 
+  const heal = db.prepare(
+    `UPDATE shots SET duration_ms = ?, final_weight_g = ?, stable_weight_g = ?, stable_weight_source = ?,
+       device_rating = ?, incomplete = 0, raw_slog = ?, water_ml = NULL WHERE id = ?`
+  );
+
   for (const entry of live) {
     if (known.has(entry.id)) {
+      // Archived while incomplete and since finished on the device: fetch the
+      // full log once. UPDATE, not REPLACE — a replaced row would cascade away
+      // its notes, analysis and sync state. water_ml = NULL re-runs
+      // classification; the analysis never ran on a row without a log.
+      if (known.get(entry.id) && !entry.incomplete) {
+        try {
+          const slog = await fetchSlog(entry.id);
+          if (slog && slog.length > 0) {
+            const derived = deriveWeight(slog, entry.id, entry.volume);
+            heal.run(entry.duration, entry.volume, derived.weight, derived.source, entry.rating || null, slog, entry.id);
+            result.archived++;
+            fresh.push(entry.id);
+            sawNew = true;
+            continue;
+          }
+        } catch (error) {
+          result.failures.push({ shotId: entry.id, reason: error instanceof Error ? error.message : String(error) });
+          continue;
+        }
+      }
       result.skipped++;
       continue;
     }
+    if (entry.incomplete && entry.id === newestId) continue;
 
     try {
       const slog = await fetchSlog(entry.id);
