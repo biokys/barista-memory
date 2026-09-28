@@ -28,9 +28,11 @@ export function loadArchivedShot(db: DatabaseSync, shotId: number, fullCurve: bo
     | undefined;
   if (!context) return null;
 
-  const row = db.prepare("SELECT raw_slog FROM shots WHERE id = ?").get(shotId) as
-    | { raw_slog: Uint8Array | null }
+  const row = db.prepare("SELECT raw_slog, device_notes FROM shots WHERE id = ?").get(shotId) as
+    | { raw_slog: Uint8Array | null; device_notes: string | null }
     | undefined;
+  let deviceNotes: Record<string, unknown> | null = null;
+  try { deviceNotes = row?.device_notes ? JSON.parse(row.device_notes) : null; } catch { deviceNotes = null; }
   let shot: any = null;
   if (row?.raw_slog) {
     const parsed = parseSlog(Buffer.from(row.raw_slog), shotId);
@@ -43,7 +45,7 @@ export function loadArchivedShot(db: DatabaseSync, shotId: number, fullCurve: bo
     }
   }
 
-  return { context, machine: machineContextOf(context), shot };
+  return { context, machine: machineContextOf(context), shot, device_notes: deviceNotes };
 }
 
 /**

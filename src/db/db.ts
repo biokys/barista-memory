@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** Bump when a migration is added below. */
-const SCHEMA_VERSION = 9;
+const SCHEMA_VERSION = 10;
 
 /**
  * Changes that CREATE ... IF NOT EXISTS cannot make on their own.
@@ -98,6 +98,15 @@ function migrate(db: DatabaseSync, from: number): void {
     const columns = db.prepare("PRAGMA table_info(shots)").all() as Array<{ name: string }>;
     if (columns.length > 0 && !columns.some((column) => column.name === "device_id")) {
       db.exec("ALTER TABLE shots ADD COLUMN device_id INTEGER");
+    }
+  }
+
+  if (from < 10) {
+    const columns = db.prepare("PRAGMA table_info(shots)").all() as Array<{ name: string }>;
+    const names = new Set(columns.map((column) => column.name));
+    if (names.size > 0) {
+      if (!names.has("device_notes")) db.exec("ALTER TABLE shots ADD COLUMN device_notes TEXT");
+      if (!names.has("device_notes_at")) db.exec("ALTER TABLE shots ADD COLUMN device_notes_at INTEGER");
     }
   }
 }

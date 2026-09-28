@@ -1,7 +1,8 @@
 import type { DatabaseSync } from "node:sqlite";
 import { config } from "./config.js";
 import { openDatabase, type ShotContextRow } from "./db/db.js";
-import { fetchIndex, fetchSlog, parseSlog } from "./device/client.js";
+import { fetchIndex, fetchSlog, getNotes, parseSlog } from "./device/client.js";
+import type { IndexEntry } from "./device/parsers/binaryIndex.js";
 import { stableWeight } from "./stableWeight.js";
 import { recomputeAnalysis } from "./anomaly.js";
 import { powerSessions, machineContextForShot, allStateSamples, coldBaseline } from "./machineState.js";
@@ -89,6 +90,45 @@ export function recomputeMachineContext(db: DatabaseSync, all = false): number {
   return changed;
 }
 
+/** Notes typed on the machine after this long are still picked up for recent shots. */
+const NOTES_REFRESH_S = 3600;
+const NOTES_RECENT_S = 3 * 86400;
+/** One WebSocket per read; a full device on the first pass is spread over several. */
+const NOTES_PER_PASS = 10;
+
+/**
+ * Copy the device's own notes for each shot it still holds.
+ *
+ * What is typed into the machine's web UI (rating, taste note, doseOut) lives
+ * only there and is gone after a wipe. Read once per shot, again when the
+ * index shows the rating changed, and hourly for the last few days, since a
+ * text-only edit leaves no trace in the index. Also captures what notes sync
+ * wrote, which is the device's state too.
+ */
+async function captureDeviceNotes(
+  db: DatabaseSync,
+  onDevice: Map<number, IndexEntry>,
+  rerated: Set<number>,
+  lastCapture: Map<number, number | null>
+): Promise<number> {
+  const now = Math.floor(Date.now() / 1000);
+  const store = db.prepare("UPDATE shots SET device_notes = ?, device_notes_at = ? WHERE id = ?");
+  let captured = 0;
+  for (const [archiveId, entry] of onDevice) {
+    if (captured >= NOTES_PER_PASS) break;
+    if (!entry.hasNotes) continue;
+    const at = lastCapture.get(archiveId) ?? null;
+    const due =
+      at == null || rerated.has(archiveId) || (entry.timestamp > now - NOTES_RECENT_S && now - at > NOTES_REFRESH_S);
+    if (!due) continue;
+    const notes = await getNotes(entry.id);
+    if (!notes) continue; // Unreachable or no answer; the next pass tries again.
+    store.run(JSON.stringify(notes), now, archiveId);
+    captured++;
+  }
+  return captured;
+}
+
 export interface IngestResult {
   onDevice: number;
   archived: number;
@@ -97,6 +137,8 @@ export interface IngestResult {
   classified: number;
   /** Ids archived in this pass that turned out to be coffees, not flushes. */
   newCoffeeIds: number[];
+  /** Shots whose notes were copied from the device in this pass. */
+  notesCaptured: number;
   failures: Array<{ shotId: number; reason: string }>;
 }
 
@@ -120,19 +162,25 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
   const live = entries.filter((entry) => !entry.deleted);
 
   const archivedRows = db
-    .prepare("SELECT id, device_id, started_at, incomplete FROM shots")
-    .all() as Array<{ id: number; device_id: number | null; started_at: number; incomplete: number }>;
+    .prepare(
+      `SELECT id, device_id, started_at, incomplete, raw_slog IS NOT NULL AS has_log,
+              device_rating, device_notes_at FROM shots`
+    )
+    .all() as Array<{
+      id: number; device_id: number | null; started_at: number; incomplete: number; has_log: number;
+      device_rating: number | null; device_notes_at: number | null;
+    }>;
   const sameShot = (deviceId: number, startedAt: number) => `${deviceId}@${startedAt}`;
   const known = new Map(
-    archivedRows
-      .filter((row) => row.device_id != null)
-      .map((row) => [sameShot(row.device_id!, row.started_at), { id: row.id, incomplete: row.incomplete === 1 }])
+    archivedRows.filter((row) => row.device_id != null).map((row) => [sameShot(row.device_id!, row.started_at), row])
   );
   const usedIds = new Set(archivedRows.map((row) => row.id));
   let maxId = archivedRows.reduce((max, row) => Math.max(max, row.id), 0);
-  // Archive id -> device id, for every archived shot the device still holds;
-  // notes are pushed only to these, under the device's id.
-  const onDevice = new Map<number, number>();
+  // Archive id -> index entry, for every archived shot the device still holds;
+  // notes are pushed to and read from only these, under the device's id.
+  const onDevice = new Map<number, IndexEntry>();
+  // Archive ids whose rating changed on the machine since the last pass.
+  const rerated = new Set<number>();
   // The index lists a shot as soon as recording starts, flagged incomplete and
   // with an empty .slog until it ends. Shot 33 was archived 16 s into the pull
   // with no curve at all. The newest incomplete entry is taken to be still
@@ -148,6 +196,7 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
     notesSynced: 0,
     classified: 0,
     newCoffeeIds: [],
+    notesCaptured: 0,
     failures: [],
   };
 
@@ -169,6 +218,7 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
   const fresh: number[] = [];
   let sawNew = false;
 
+  const setRating = db.prepare("UPDATE shots SET device_rating = ? WHERE id = ?");
   const heal = db.prepare(
     `UPDATE shots SET duration_ms = ?, final_weight_g = ?, stable_weight_g = ?, stable_weight_source = ?,
        device_rating = ?, incomplete = 0, raw_slog = ?, water_ml = NULL WHERE id = ?`
@@ -177,12 +227,19 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
   for (const entry of live) {
     const match = known.get(sameShot(entry.id, entry.timestamp));
     if (match) {
-      onDevice.set(match.id, entry.id);
-      // Archived while incomplete and since finished on the device: fetch the
-      // full log once. UPDATE, not REPLACE — a replaced row would cascade away
-      // its notes, analysis and sync state. water_ml = NULL re-runs
-      // classification; the analysis never ran on a row without a log.
-      if (match.incomplete && !entry.incomplete) {
+      onDevice.set(match.id, entry);
+      if ((entry.rating || null) !== match.device_rating) {
+        setRating.run(entry.rating || null, match.id);
+        rerated.add(match.id);
+      }
+      // Archived while incomplete, or with an empty log, and complete on the
+      // device now: fetch the log again. The device has served a completed
+      // shot's .slog as 0 bytes (shots 6 and 22, whose data was then lost to
+      // a wipe), so an empty answer is retried on every pass while the device
+      // still holds the shot. UPDATE, not REPLACE — a replaced row would
+      // cascade away its notes, analysis and sync state. water_ml = NULL
+      // re-runs classification; the analysis never ran on a row without a log.
+      if ((match.incomplete || !match.has_log) && !entry.incomplete) {
         try {
           const slog = await fetchSlog(entry.id);
           if (slog && slog.length > 0) {
@@ -233,12 +290,12 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
         machine.settledness,
         entry.rating || null,
         entry.incomplete ? 1 : 0,
-        slog,
+        slog.length > 0 ? slog : null,
         Math.floor(Date.now() / 1000)
       );
       usedIds.add(archiveId);
       maxId = Math.max(maxId, archiveId);
-      onDevice.set(archiveId, entry.id);
+      onDevice.set(archiveId, entry);
       result.archived++;
       fresh.push(archiveId);
       sawNew = true;
@@ -271,7 +328,7 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
       .all() as unknown as ShotContextRow[];
 
     for (const context of candidates) {
-      const deviceId = onDevice.get(context.id);
+      const deviceId = onDevice.get(context.id)?.id;
       if (deviceId == null) continue;
       try {
         if (await syncNotes(db, context, deviceId)) result.notesSynced++;
@@ -283,6 +340,8 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
       }
     }
   }
+
+  result.notesCaptured = await captureDeviceNotes(db, onDevice, rerated, new Map(archivedRows.map((r) => [r.id, r.device_notes_at])));
 
   // Curves are judged once the kind is known, so a flush is never analysed.
   if (sawNew) recomputeAnalysis(db);

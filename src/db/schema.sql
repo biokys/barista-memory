@@ -45,6 +45,11 @@ CREATE TABLE IF NOT EXISTS shots (
   -- minutes ago from one woken half an hour ago.
   machine_settledness   INTEGER,
   device_rating  INTEGER,
+  -- The device's own notes for the shot, verbatim JSON as the machine holds
+  -- them (rating, taste note, doseOut typed into its web UI). They exist only
+  -- on the machine and a firmware update wipes them. Refreshed by ingest.
+  device_notes    TEXT,
+  device_notes_at INTEGER,
   incomplete     INTEGER NOT NULL DEFAULT 0,
   raw_slog       BLOB,
   ingested_at    INTEGER NOT NULL,

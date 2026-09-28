@@ -103,7 +103,20 @@ notes. Such a shot is archived under the next free id; `shots.device_id` keeps
 the device's, and notes sync addresses the device by that. The index lists a
 shot from the moment recording starts (incomplete, empty `.slog`), so the
 newest incomplete entry waits for a later pass, and a shot archived incomplete
-is fetched again once the device marks it complete.
+is fetched again once the device marks it complete. The same retry covers a
+completed shot whose `.slog` came back as 0 bytes: shots 6 and 22 were
+archived that way and their data was lost when the device was wiped.
+
+**The device's own notes are archived verbatim** in `shots.device_notes`.
+What is typed into the machine's web UI exists only there. They are read
+once per shot, again when the index rating changes, and hourly for shots
+from the last three days (a text edit leaves no trace in the index), at most
+ten reads per pass.
+
+**A `.slog` whose header says 0 samples may still hold samples.** The count
+is patched in only when recording ends, so a pull cut short leaves 0 and the
+samples followed by the unwritten block. The firmware discards such a shot;
+the parser keeps samples while the tick rises (archived shot 2: 34 s of 59).
 
 **Brewing context lives in `setups` as time intervals, not as fields on shots.**
 A change is recorded once and later shots inherit it; unspecified fields inherit

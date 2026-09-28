@@ -55,6 +55,15 @@ function compareTable(a, b) {
     </table>`;
 }
 
+/** What was typed into the machine's own web UI for this shot, if anything. */
+function deviceNoteLine(notes) {
+  const text = typeof notes?.notes === "string" ? notes.notes.trim() : "";
+  const rating = Number(notes?.rating) || 0;
+  if (!text && !rating) return "";
+  const esc = (v) => v.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+  return `<p class="small faint" style="margin-top:12px">${t("shot.device_note")}: ${rating ? "★".repeat(rating) : ""}${rating && text ? " · " : ""}${esc(text)}</p>`;
+}
+
 export async function renderShot(view, [id]) {
   let data;
   try {
@@ -121,6 +130,7 @@ export async function renderShot(view, [id]) {
         <div class="row" id="stars" style="font-size:1.8rem;gap:4px;cursor:pointer">${[1,2,3,4,5].map((n) => `<span data-n="${n}" style="color:${(c.rating ?? 0) >= n ? "var(--accent)" : "var(--line-2)"}">★</span>`).join("")}</div>
         <div class="field" style="margin-top:12px"><label>${t("shot.note")}</label><textarea id="note" rows="3" placeholder="${t("shot.note_placeholder")}">${c.taste_note ?? ""}</textarea></div>
         <div class="row" style="margin-top:10px"><button class="btn primary sm" id="save">${t("shot.save")}</button></div>
+        ${deviceNoteLine(data.device_notes)}
       </section>
     </div>`;
 
