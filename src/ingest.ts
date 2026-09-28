@@ -108,16 +108,31 @@ export interface IngestResult {
  * being down is filled on the next pass rather than skipped forever, and a
  * device whose shot ids restarted (a reset, a replaced controller) does not
  * silently stop being archived.
+ *
+ * A shot is the same shot only if both its device id and its start time match.
+ * The id alone is not enough: a firmware update that wipes history restarts
+ * the device's numbering, and its new shot 1 would have been skipped as
+ * "already archived" — and had the old shot 1's bean written into its notes.
+ * A new shot whose device id is taken in the archive gets the next free id.
  */
 export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
   const entries = await fetchIndex();
   const live = entries.filter((entry) => !entry.deleted);
 
+  const archivedRows = db
+    .prepare("SELECT id, device_id, started_at, incomplete FROM shots")
+    .all() as Array<{ id: number; device_id: number | null; started_at: number; incomplete: number }>;
+  const sameShot = (deviceId: number, startedAt: number) => `${deviceId}@${startedAt}`;
   const known = new Map(
-    (db.prepare("SELECT id, incomplete FROM shots").all() as Array<{ id: number; incomplete: number }>).map(
-      (row) => [row.id, row.incomplete === 1]
-    )
+    archivedRows
+      .filter((row) => row.device_id != null)
+      .map((row) => [sameShot(row.device_id!, row.started_at), { id: row.id, incomplete: row.incomplete === 1 }])
   );
+  const usedIds = new Set(archivedRows.map((row) => row.id));
+  let maxId = archivedRows.reduce((max, row) => Math.max(max, row.id), 0);
+  // Archive id -> device id, for every archived shot the device still holds;
+  // notes are pushed only to these, under the device's id.
+  const onDevice = new Map<number, number>();
   // The index lists a shot as soon as recording starts, flagged incomplete and
   // with an empty .slog until it ends. Shot 33 was archived 16 s into the pull
   // with no curve at all. The newest incomplete entry is taken to be still
@@ -138,12 +153,12 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
 
   const insert = db.prepare(
     `INSERT OR IGNORE INTO shots
-       (id, started_at, profile_id, profile_name, duration_ms, final_weight_g,
+       (id, device_id, started_at, profile_id, profile_name, duration_ms, final_weight_g,
         stable_weight_g, stable_weight_source,
         machine_powered_for_s, machine_heating_for_s, machine_heatup_s, machine_settled,
         machine_settledness,
         device_rating, incomplete, raw_slog, ingested_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   // Sessions are reconstructed once per pass, not once per shot: the state
@@ -160,19 +175,21 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
   );
 
   for (const entry of live) {
-    if (known.has(entry.id)) {
+    const match = known.get(sameShot(entry.id, entry.timestamp));
+    if (match) {
+      onDevice.set(match.id, entry.id);
       // Archived while incomplete and since finished on the device: fetch the
       // full log once. UPDATE, not REPLACE — a replaced row would cascade away
       // its notes, analysis and sync state. water_ml = NULL re-runs
       // classification; the analysis never ran on a row without a log.
-      if (known.get(entry.id) && !entry.incomplete) {
+      if (match.incomplete && !entry.incomplete) {
         try {
           const slog = await fetchSlog(entry.id);
           if (slog && slog.length > 0) {
             const derived = deriveWeight(slog, entry.id, entry.volume);
-            heal.run(entry.duration, entry.volume, derived.weight, derived.source, entry.rating || null, slog, entry.id);
+            heal.run(entry.duration, entry.volume, derived.weight, derived.source, entry.rating || null, slog, match.id);
             result.archived++;
-            fresh.push(entry.id);
+            fresh.push(match.id);
             sawNew = true;
             continue;
           }
@@ -197,8 +214,10 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
 
       const derived = deriveWeight(slog, entry.id, entry.volume);
       const machine = machineContextForShot(sessions, entry.timestamp, samples, coldBaseline(db, entry.timestamp));
+      const archiveId = usedIds.has(entry.id) ? maxId + 1 : entry.id;
 
       insert.run(
+        archiveId,
         entry.id,
         entry.timestamp,
         entry.profileId || null,
@@ -217,8 +236,11 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
         slog,
         Math.floor(Date.now() / 1000)
       );
+      usedIds.add(archiveId);
+      maxId = Math.max(maxId, archiveId);
+      onDevice.set(archiveId, entry.id);
       result.archived++;
-      fresh.push(entry.id);
+      fresh.push(archiveId);
       sawNew = true;
     } catch (error) {
       result.failures.push({
@@ -244,15 +266,15 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
     // Sync newly archived shots, plus any still on the device whose context has
     // since changed — editing a setup's valid_from retroactively changes what
     // those shots should say.
-    const onDeviceIds = new Set(live.map((entry) => entry.id));
     const candidates = db
       .prepare("SELECT * FROM shot_context WHERE id IN (SELECT id FROM shots) ORDER BY started_at DESC LIMIT 100")
       .all() as unknown as ShotContextRow[];
 
     for (const context of candidates) {
-      if (!onDeviceIds.has(context.id) && !fresh.includes(context.id)) continue;
+      const deviceId = onDevice.get(context.id);
+      if (deviceId == null) continue;
       try {
-        if (await syncNotes(db, context)) result.notesSynced++;
+        if (await syncNotes(db, context, deviceId)) result.notesSynced++;
       } catch (error) {
         result.failures.push({
           shotId: context.id,

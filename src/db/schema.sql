@@ -15,7 +15,12 @@ PRAGMA foreign_keys = ON;
 -- not read today (puck resistance, target flow, system info) can still be
 -- recovered from the archive later.
 CREATE TABLE IF NOT EXISTS shots (
-  id             INTEGER PRIMARY KEY,          -- the device's own shot id
+  id             INTEGER PRIMARY KEY,          -- the archive's id: the device's, unless taken
+  -- The id the device knows the shot by. Equal to id until the device's
+  -- numbering restarts (a firmware update that wipes history): its new shot 1
+  -- is then a different shot from the archived 1, told apart by started_at,
+  -- and is archived under the next free id instead.
+  device_id      INTEGER,
   started_at     INTEGER NOT NULL,             -- unix seconds, from the device
   profile_id     TEXT,
   profile_name   TEXT,
@@ -54,6 +59,7 @@ CREATE TABLE IF NOT EXISTS shots (
 );
 
 CREATE INDEX IF NOT EXISTS shots_started_at ON shots (started_at);
+CREATE INDEX IF NOT EXISTS shots_device_id ON shots (device_id);
 
 -- A coffee as an identity, apart from the periods it was ground in: the
 -- same bag bought again next month is the same coffee, and "what grind did

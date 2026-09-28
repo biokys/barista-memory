@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** Bump when a migration is added below. */
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 /**
  * Changes that CREATE ... IF NOT EXISTS cannot make on their own.
@@ -91,6 +91,15 @@ function migrate(db: DatabaseSync, from: number): void {
     }
     db.exec("DROP VIEW IF EXISTS shot_context");
   }
+
+  if (from < 9) {
+    // Before the column existed, every archived id was the device's id; the
+    // backfill copies it over once schema.sql has run.
+    const columns = db.prepare("PRAGMA table_info(shots)").all() as Array<{ name: string }>;
+    if (columns.length > 0 && !columns.some((column) => column.name === "device_id")) {
+      db.exec("ALTER TABLE shots ADD COLUMN device_id INTEGER");
+    }
+  }
 }
 
 /**
@@ -112,6 +121,9 @@ function backfill(db: DatabaseSync, from: number): void {
         WHERE c.name = TRIM(setups.bean) AND COALESCE(c.roaster, '') = TRIM(COALESCE(setups.roaster, ''))
       ) WHERE coffee_id IS NULL AND bean IS NOT NULL AND TRIM(bean) != '';
     `);
+  }
+  if (from < 9) {
+    db.exec("UPDATE shots SET device_id = id WHERE device_id IS NULL");
   }
 }
 
