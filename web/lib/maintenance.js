@@ -16,7 +16,7 @@ export function tone(m) {
 }
 
 export function lastLine(m) {
-  if (!m.last_at) return t("maint.never");
+  if (!m.last_at) return t(m.fraction != null ? "maint.never_counted" : "maint.never");
   return `${t("maint.last")} ${fmt.dateTime(m.last_at)}${m.last_auto ? " · " + t("maint.detected") : ""}`;
 }
 

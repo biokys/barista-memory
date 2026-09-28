@@ -47,8 +47,14 @@ export interface MaintenanceStatus {
   interval_shots: number | null;
   interval_water_l: number | null;
   interval_days: number | null;
-  /** Worst-case fraction of the interval used, 0–∞; null when never logged. */
+  /**
+   * Worst-case fraction of the interval used, 0–∞. Before the first log entry
+   * it is counted from the start of the archive; null only when nothing can be
+   * counted (a routine measured in days alone).
+   */
   fraction: number | null;
+  /** True when nothing is logged yet and the figures run from the archive's first shot. */
+  since_archive_start: boolean;
   state: "never" | "ok" | "soon" | "due";
 }
 
@@ -81,21 +87,25 @@ export function maintenanceStatus(db: DatabaseSync, now = Math.floor(Date.now() 
       water != null && type.interval_water_l ? water / type.interval_water_l : null,
       days != null && type.interval_days ? days / type.interval_days : null,
     ].filter((f): f is number => f != null);
-    const fraction = last ? (fractions.length ? Math.max(...fractions) : 0) : null;
+    // Never logged: count from the archive's first shot rather than show
+    // nothing. It is a lower bound (the routine may never have been done at
+    // all), which is still what tells the user when it is due.
+    const fraction = fractions.length ? Math.max(...fractions) : last ? 0 : null;
 
     return {
       key: type.key,
       enabled: type.enabled === 1,
       last_at: last?.at ?? null,
       last_auto: last?.auto === 1,
-      shots_since: last ? shots : null,
-      water_l_since: last && water != null ? Math.round(water * 10) / 10 : null,
+      shots_since: shots,
+      water_l_since: water != null ? Math.round(water * 10) / 10 : null,
       days_since: days != null ? Math.floor(days) : null,
       interval_shots: type.interval_shots,
       interval_water_l: type.interval_water_l,
       interval_days: type.interval_days,
       fraction: fraction != null ? Math.round(fraction * 100) / 100 : null,
       state: fraction == null ? "never" : fraction >= 1 ? "due" : fraction >= SOON_AT ? "soon" : "ok",
+      since_archive_start: !last,
     };
   });
 }

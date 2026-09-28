@@ -231,6 +231,7 @@
   "maint.unit.days": "days",
   "maint.last": "last",
   "maint.never": "never yet",
+  "maint.never_counted": "not logged yet · since archive start",
   "maint.detected": "detected from the machine",
   "maint.saved": "Recorded.",
   "maint.confirm_delete": "Delete this entry?",

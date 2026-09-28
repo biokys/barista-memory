@@ -231,6 +231,7 @@
   "maint.unit.days": "dní",
   "maint.last": "naposledy",
   "maint.never": "zatím nikdy",
+  "maint.never_counted": "zatím nezapsáno · od začátku archivu",
   "maint.detected": "rozpoznáno ze stroje",
   "maint.saved": "Zapsáno.",
   "maint.confirm_delete": "Smazat tento zápis?",
