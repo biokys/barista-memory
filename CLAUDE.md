@@ -96,6 +96,14 @@ re-ingest. Parsed values are a cache; the blob is the record.
 **Ingest works by set difference against the archive, never a high-water mark.**
 A gap left by the Pi being down is filled on the next pass, and a device whose
 ids restarted after a firmware update does not silently stop being archived.
+The difference is taken on (device id, start time), not the id alone: after a
+wipe the device's new shot 1 is a different shot from the archived 1, and
+matching by id skipped it and would have pushed the old shot's bean into its
+notes. Such a shot is archived under the next free id; `shots.device_id` keeps
+the device's, and notes sync addresses the device by that. The index lists a
+shot from the moment recording starts (incomplete, empty `.slog`), so the
+newest incomplete entry waits for a later pass, and a shot archived incomplete
+is fetched again once the device marks it complete.
 
 **Brewing context lives in `setups` as time intervals, not as fields on shots.**
 A change is recorded once and later shots inherit it; unspecified fields inherit
