@@ -188,6 +188,11 @@ textarea { width: 100%; resize: vertical; }
 .readout .s em { font-style: normal; font-weight: 520; }
 .readout .s b { color: var(--text); font-weight: 580; font-variant-numeric: tabular-nums; }
 .readout .s u { text-decoration: none; color: var(--text-3); }
+.readout .s .dev { font-style: normal; font-size: .76rem; font-variant-numeric: tabular-nums; }
+.readout .s .dev:empty { display: none; }
+.readout .s .dev.ok { color: var(--ok); }
+.readout .s .dev.warn { color: var(--warn); }
+.readout .s .dev.bad { color: var(--bad); }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .78rem; color: var(--text-2); }
 .legend i { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
 

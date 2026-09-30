@@ -23,16 +23,22 @@ function axis(extra = {}) {
  * reads as broken. This one shows the values under the cursor while hovering
  * and each series' `idle` figure (a peak, a mean, a last value) otherwise, so
  * the row always says something.
+ *
+ * A series with a `dev` also shows, while hovering, how far it is from its
+ * setpoint at that instant — only where the machine was controlling on that
+ * quantity (the setpoint is null otherwise), coloured by `dev.ok` / `dev.warn`.
  */
 function readout(plot, container, meta) {
   const row = document.createElement("div");
   row.className = "readout";
   row.innerHTML = `<span class="x"></span>` + meta.map((m, i) =>
-    `<span class="s" data-i="${i}"><em style="color:${m.color}">${m.name}</em><b></b><u>${m.label}</u></span>`).join("");
+    `<span class="s" data-i="${i}"><em style="color:${m.color}">${m.name}</em><b></b><u>${m.label}</u><i class="dev"></i></span>`).join("");
   container.appendChild(row);
   const cells = [...row.querySelectorAll(".s b")];
+  const devs = [...row.querySelectorAll(".s .dev")];
   const xCell = row.querySelector(".x");
-  const idle = () => { xCell.textContent = ""; xCell.hidden = true; meta.forEach((m, i) => (cells[i].textContent = m.idle ?? "–")); };
+  const clearDev = (i) => { devs[i].textContent = ""; devs[i].className = "dev"; };
+  const idle = () => { xCell.textContent = ""; xCell.hidden = true; meta.forEach((m, i) => { cells[i].textContent = m.idle ?? "–"; clearDev(i); }); };
   idle();
   plot.hooks.setCursor = plot.hooks.setCursor || [];
   plot.hooks.setCursor.push((u) => {
@@ -40,7 +46,17 @@ function readout(plot, container, meta) {
     if (idx == null) return idle();
     xCell.textContent = meta[0].x ? meta[0].x(u.data[0][idx]) : ""; xCell.hidden = !xCell.textContent;
     // `alt`: the same quantity drawn as a second series (the tail after the extraction).
-    meta.forEach((m, i) => { const v = u.data[m.series][idx] ?? (m.alt != null ? u.data[m.alt][idx] : null); cells[i].textContent = v == null ? "–" : m.fmt(v); });
+    meta.forEach((m, i) => {
+      const v = u.data[m.series][idx] ?? (m.alt != null ? u.data[m.alt][idx] : null);
+      cells[i].textContent = v == null ? "–" : m.fmt(v);
+      const actual = m.dev ? m.dev.actual?.[idx] ?? v : null;
+      const target = m.dev?.target[idx];
+      if (actual == null || target == null) return clearDev(i);
+      const d = actual - target, a = Math.abs(d), r = Number(d.toFixed(m.dev.digits));
+      devs[i].textContent = `${r === 0 ? "±" : r > 0 ? "+" : "−"}${Math.abs(r).toFixed(m.dev.digits)}`;
+      devs[i].className = `dev ${a <= m.dev.ok ? "ok" : a <= m.dev.warn ? "warn" : "bad"}`;
+      devs[i].title = `${t("machine.target")} ${target.toFixed(m.dev.digits)} ${m.label}`;
+    });
   });
   return row;
 }
@@ -108,6 +124,14 @@ export function shotChart(container, shot, compare = null, { stableWeight = null
     );
   }
   // Archives from before setpoints were exposed have no target fields at all.
+  // Deviation from the setpoint, for the hover readout. Tolerances are what
+  // reads as on target, a nudge, or a miss: a bar, a degree, a third of a
+  // ml/s. The flow setpoint is for the pump, so it is judged on pump flow.
+  const setpoint = {
+    pressure: { target: pts.map((p) => p.target_pressure_bar ?? null), ok: 0.5, warn: 1.5, digits: 1 },
+    temp: { target: pts.map((p) => p.target_temperature_c ?? null), ok: 1, warn: 2, digits: 1 },
+    flow: { target: pts.map((p) => p.target_flow_ml_s ?? null), ok: 0.3, warn: 1, digits: 2 },
+  };
   const targetMeta = [];
   if (targets && pts.some((p) => "target_pressure_bar" in p)) {
     const add = (values, style, meta) => {
@@ -120,7 +144,7 @@ export function shotChart(container, shot, compare = null, { stableWeight = null
     add(pts.map((p) => p.target_flow_ml_s ?? null), { label: "ml/s ⁽ᵗ⁾", stroke: c.flow, scale: "y" },
       { name: t("shot.target_flow"), label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(1) });
     add(pts.map((p) => p.pump_flow_ml_s ?? null), { label: "ml/s ⁽ᵖ⁾", stroke: c.flow, scale: "y", dash: undefined, width: 1, alpha: 0.45 },
-      { name: t("shot.pump_flow"), label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(2) });
+      { name: t("shot.pump_flow"), label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(2), dev: setpoint.flow });
     add(pts.map((p) => p.target_temperature_c ?? null), { label: "°C ⁽ᵗ⁾", stroke: c.temp, scale: "t" },
       { name: t("shot.target_temperature"), label: "°C", color: c.temp, fmt: (v) => v.toFixed(1) });
   }
@@ -179,9 +203,9 @@ export function shotChart(container, shot, compare = null, { stableWeight = null
   // stable weight — not the curve's maximum, which on a self-taring scale is
   // the pre-tare reading from the first second (181.8 g on shot 415).
   const meta = [
-    { series: 1, alt: tails.p, name: t("shot.pressure"), label: "bar", color: c.pressure, fmt: (v) => v.toFixed(1), idle: sm.pressure ? `⌃ ${sm.pressure.max_bar.toFixed(1)}` : "–", x: (x) => `${x.toFixed(1)} s` },
+    { series: 1, alt: tails.p, name: t("shot.pressure"), label: "bar", color: c.pressure, fmt: (v) => v.toFixed(1), idle: sm.pressure ? `⌃ ${sm.pressure.max_bar.toFixed(1)}` : "–", x: (x) => `${x.toFixed(1)} s`, dev: setpoint.pressure },
     { series: 2, alt: tails.f, name: t("shot.flow"), label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(2), idle: sm.flow ? `⌀ ${sm.flow.average_flow_rate_ml_s.toFixed(2)}` : "–" },
-    { series: 3, alt: tails.t, name: t("shot.temperature"), label: "°C", color: c.temp, fmt: (v) => v.toFixed(1), idle: sm.temperature ? `⌀ ${sm.temperature.average_celsius.toFixed(1)}` : "–" },
+    { series: 3, alt: tails.t, name: t("shot.temperature"), label: "°C", color: c.temp, fmt: (v) => v.toFixed(1), idle: sm.temperature ? `⌀ ${sm.temperature.average_celsius.toFixed(1)}` : "–", dev: setpoint.temp },
     { series: 4, name: t("shot.weight"), label: "g", color: c.weight, fmt: (v) => v.toFixed(1), idle: stableWeight != null ? `→ ${stableWeight.toFixed(1)}` : "–" },
   ];
   if (compare?.full_curve) meta.push(
