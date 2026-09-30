@@ -84,6 +84,18 @@ interface TransformedShot {
   full_curve?: TransformedSample[];
 }
 
+/**
+ * Index of the last sample of the extraction, or -1 for a log without
+ * setpoints (take it whole). See transformShotForAI for why; shared with the
+ * history's sparklines so every view cuts the same place.
+ */
+export function extractionEndIndex(samples: ShotSample[]): number {
+  let last = -1;
+  samples.forEach((s, i) => { if ((s.tp ?? 0) > 0 || (s.tf ?? 0) > 0) last = i; });
+  if (last >= 0) while (last + 1 < samples.length && (samples[last + 1].pf ?? 0) > 0) last++;
+  return last;
+}
+
 export function transformShotForAI(shot: ShotData, includeFullCurve: boolean = false, options: TransformOptions = {}): TransformedShot {
   // Extract bluetooth scale and volumetric info from first sample
   const firstSample = shot.samples[0];
@@ -105,9 +117,7 @@ export function transformShotForAI(shot: ShotData, includeFullCurve: boolean = f
   // a quarter second before the valve closes (shot 53: target gone at 37.44 s,
   // puck flow 1.91 ml/s at 37.69, 0 at 37.94, and only then the climb). Pump
   // flow is no guide — it runs on into the closed valve, which is the climb.
-  let lastDriven = -1;
-  shot.samples.forEach((s, i) => { if ((s.tp ?? 0) > 0 || (s.tf ?? 0) > 0) lastDriven = i; });
-  if (lastDriven >= 0) while (lastDriven + 1 < shot.samples.length && (shot.samples[lastDriven + 1].pf ?? 0) > 0) lastDriven++;
+  const lastDriven = extractionEndIndex(shot.samples);
   const pressureEnd = lastDriven >= 0 ? lastDriven + 1 : shot.samples.length;
 
   // Calculate summaries
