@@ -91,16 +91,23 @@ export function transformShotForAI(shot: ShotData, includeFullCurve: boolean = f
   const volumetricMode = firstSample?.systemInfo?.shotStartedVolumetric || false;
 
   // The log runs on for 2–3 s after the controller stops asking for anything
-  // (target pressure and flow both 0): the pump is off and the 3-way valve
-  // closes, and the boiler side the sensor sits on climbs towards the OPV.
+  // (target pressure and flow both 0): the 3-way valve closes, the pump runs
+  // down into it, and the boiler side the sensor sits on climbs towards the OPV.
   // Shot 52 read 9.8 bar there after an extraction that peaked at 6.2. Only
   // the pressure is not the puck's any more: the cup still fills, and the
   // temperature and flow are still real. So pressure figures stop at the last
-  // sample with a setpoint and everything else runs to the end; the curve
+  // sample of the extraction and everything else runs to the end; the curve
   // keeps the tail, marked by extraction_end_seconds. A log with no setpoints
   // at all is taken whole.
+  //
+  // The extraction is the samples with a setpoint, and after the last one,
+  // those where water still goes through the puck: the setpoint clears about
+  // a quarter second before the valve closes (shot 53: target gone at 37.44 s,
+  // puck flow 1.91 ml/s at 37.69, 0 at 37.94, and only then the climb). Pump
+  // flow is no guide — it runs on into the closed valve, which is the climb.
   let lastDriven = -1;
   shot.samples.forEach((s, i) => { if ((s.tp ?? 0) > 0 || (s.tf ?? 0) > 0) lastDriven = i; });
+  if (lastDriven >= 0) while (lastDriven + 1 < shot.samples.length && (shot.samples[lastDriven + 1].pf ?? 0) > 0) lastDriven++;
   const pressureEnd = lastDriven >= 0 ? lastDriven + 1 : shot.samples.length;
 
   // Calculate summaries

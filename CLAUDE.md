@@ -199,9 +199,12 @@ as Latin-1 by the vendored parser; compare through `asLogged()`.
 
 **Pressure after the extraction is the boiler's, not the puck's.** The log
 runs on for 2–3 s after the controller stops (target pressure and flow both
-0); the valve is closed and the sensor climbs towards the OPV (shot 52: 9.8
-bar after a 6.2 bar extraction). Pressure statistics stop at
-`metadata.extraction_end_seconds`, the chart draws that pressure dashed and
+0); the valve closes, the pump runs down into it and the sensor climbs
+towards the OPV (shot 52: 9.8 bar after a 6.2 bar extraction). The
+extraction ends at the last sample with a setpoint or, after it, with puck
+flow > 0 — the setpoint clears a quarter second before the valve closes
+(shot 53); pump flow is no guide, it is what drives the climb. Pressure
+statistics stop at `metadata.extraction_end_seconds`, the chart draws that pressure dashed and
 the receipt not at all. Flow, temperature and weight run to the end — the
 cup still fills.
 
