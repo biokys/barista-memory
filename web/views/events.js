@@ -6,6 +6,7 @@ import { statusRows } from "../lib/maintenance.js";
 const KINDS = ["equipment", "technique", "maintenance", "beans", "other"];
 const toLocalInput = (unix) => { const d = new Date(unix * 1000); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
 const fromLocalInput = (s) => Math.floor(new Date(s).getTime() / 1000);
+const attr = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
 /**
  * Turning points: a new tool, a change of technique, maintenance. Separate
@@ -13,6 +14,7 @@ const fromLocalInput = (s) => Math.floor(new Date(s).getTime() / 1000);
  * inherit; these are moments the timeline is cut at.
  */
 export async function renderEvents(view) {
+  let editing = null;
   const load = async () => {
     const [{ events }, maint] = await Promise.all([api.events(), api.maintenance()]);
     const enabled = maint.status.filter((m) => m.enabled);
@@ -69,7 +71,17 @@ export async function renderEvents(view) {
           ${events.length ? `<div class="timeline">${events.map((e) => `
             <div class="tl-item">
               <div class="when">${fmt.dateTime(e.at)}</div>
-              <div class="row"><span class="pill accent">${t("events.kind." + e.kind)}</span><b>${e.title}</b>${e.note ? `<span class="faint small">${e.note}</span>` : ""}<button class="btn sm ghost" data-del-event="${e.id}" data-title="${e.title}">${t("events.delete")}</button></div>
+              ${editing === e.id ? `
+              <form class="form edit-event" style="margin-top:8px">
+                <div class="field"><label>${t("events.what")}</label><input name="title" required value="${attr(e.title)}"></div>
+                <div class="grid cols-2">
+                  <div class="field"><label>${t("events.kind")}</label><select name="kind">${KINDS.map((k) => `<option value="${k}" ${k === e.kind ? "selected" : ""}>${t("events.kind." + k)}</option>`).join("")}</select></div>
+                  <div class="field"><label>${t("events.when")}</label><input type="datetime-local" name="at" value="${toLocalInput(e.at)}"></div>
+                </div>
+                <div class="field"><label>${t("events.note")}</label><input name="note" value="${attr(e.note)}"></div>
+                <div class="row"><button class="btn primary sm" type="submit">${t("events.save")}</button><button class="btn sm ghost" type="button" data-cancel>${t("events.cancel")}</button></div>
+              </form>` : `
+              <div class="row"><span class="pill accent">${t("events.kind." + e.kind)}</span><b>${e.title}</b>${e.note ? `<span class="faint small">${e.note}</span>` : ""}<button class="btn sm ghost" data-edit-event="${e.id}">${t("events.edit")}</button><button class="btn sm ghost" data-del-event="${e.id}" data-title="${attr(e.title)}">${t("events.delete")}</button></div>`}
             </div>`).join("")}</div>` : `<p class="empty">${t("events.none")}</p>`}
         </section>
         </div>
@@ -102,6 +114,15 @@ export async function renderEvents(view) {
       if (!confirm(t("events.confirm_delete", { title: b.dataset.title }))) return;
       await api.deleteEvent(b.dataset.delEvent); toast(t("events.deleted")); load();
     }));
+    view.querySelectorAll("[data-edit-event]").forEach((b) => (b.onclick = () => { editing = Number(b.dataset.editEvent); load(); }));
+    view.querySelectorAll("[data-cancel]").forEach((b) => (b.onclick = () => { editing = null; load(); }));
+    const edit = view.querySelector(".edit-event");
+    if (edit) edit.onsubmit = async (e) => {
+      e.preventDefault();
+      const body = Object.fromEntries(new FormData(edit));
+      body.at = fromLocalInput(body.at);
+      try { await api.updateEvent(editing, body); toast(t("events.updated")); editing = null; load(); } catch (err) { toast(String(err.message), "bad"); }
+    };
   };
   await load();
 }
