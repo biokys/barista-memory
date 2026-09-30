@@ -3,6 +3,7 @@ import type { ShotContextRow } from "./db/db.js";
 import { parseSlog } from "./device/client.js";
 import { transformShotForAI } from "./device/shotTransformer.js";
 import { cleanWeightSeries } from "./stableWeight.js";
+import { phasePlan, preinfusionPhasesOf, snapshotForShot, type PlannedPhase } from "./profileSnapshots.js";
 
 /** The machine's thermal context for a shot, or null when the record started after it. */
 export function machineContextOf(context: ShotContextRow) {
@@ -33,10 +34,13 @@ export function loadArchivedShot(db: DatabaseSync, shotId: number, fullCurve: bo
     | undefined;
   let deviceNotes: Record<string, unknown> | null = null;
   try { deviceNotes = row?.device_notes ? JSON.parse(row.device_notes) : null; } catch { deviceNotes = null; }
+  const snapshot = snapshotForShot(db, shotId);
   let shot: any = null;
+  let phasePlanned: PlannedPhase[] | null = null;
   if (row?.raw_slog) {
     const parsed = parseSlog(Buffer.from(row.raw_slog), shotId);
-    shot = transformShotForAI(parsed, fullCurve);
+    shot = transformShotForAI(parsed, fullCurve, snapshot ? { preinfusionPhases: preinfusionPhasesOf(snapshot.profile) } : {});
+    if (snapshot) phasePlanned = phasePlan(snapshot.profile, parsed);
     // One cleaned weight per curve point, alongside the raw reading: the chart
     // draws the cleaned one, the raw stays available for anyone who asks.
     if (fullCurve && Array.isArray(shot.full_curve) && shot.full_curve.length === parsed.samples.length) {
@@ -45,7 +49,12 @@ export function loadArchivedShot(db: DatabaseSync, shotId: number, fullCurve: bo
     }
   }
 
-  return { context, machine: machineContextOf(context), shot, device_notes: deviceNotes };
+  // The profile version itself is served on its own (a download); here only
+  // what identifies it, and the plan laid over the log.
+  const profileSnapshot = snapshot
+    ? { id: snapshot.id, profile_id: snapshot.profile_id, label: snapshot.label, content_hash: snapshot.content_hash, first_seen_at: snapshot.first_seen_at }
+    : null;
+  return { context, machine: machineContextOf(context), shot, device_notes: deviceNotes, profile_snapshot: profileSnapshot, phase_plan: phasePlanned };
 }
 
 /**

@@ -28,6 +28,7 @@ import { getSetting } from "../settings.js";
 import { setSetting } from "../settings.js";
 import { loadArchivedShot, pressureSparkline } from "../shots.js";
 import { saveProfileMerged, selectProfileOnMachine } from "../profiles.js";
+import { listSnapshots, snapshotDownload } from "../profileSnapshots.js";
 import { statsSummary } from "../stats.js";
 import { ingestOnce } from "../ingest.js";
 import { recordEvent, updateEvent, deleteEvent, listEvents, eraOf, EVENT_KINDS } from "../events.js";
@@ -197,6 +198,31 @@ route("GET", "/api/shots/:id/receipt.svg", async (_req, res, p) => {
   if (!receipt) return json(res, 404, { error: "SHOT_NOT_FOUND" });
   res.writeHead(200, { "Content-Type": "image/svg+xml", "Cache-Control": "no-cache" });
   res.end(receipt.svg);
+});
+
+/** A stored profile version as a file the GaggiMate web UI can import. */
+function sendProfile(res: ServerResponse, download: { filename: string; json: string } | null) {
+  if (!download) return json(res, 404, { error: "PROFILE_SNAPSHOT_NOT_FOUND" });
+  // Labels are free text (Czech included): an ASCII fallback plus RFC 5987.
+  const ascii = download.filename.normalize("NFD").replace(/[^\x20-\x7e]/g, "").replace(/"/g, "") || "profile.json";
+  res.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Content-Disposition": `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(download.filename)}`,
+  });
+  res.end(download.json);
+}
+
+route("GET", "/api/shots/:id/profile.json", async (_req, res, p) => {
+  const row = db.prepare("SELECT snapshot_id FROM shot_profiles WHERE shot_id = ?").get(Number(p.id)) as { snapshot_id: number } | undefined;
+  sendProfile(res, row ? snapshotDownload(db, row.snapshot_id) : null);
+});
+
+route("GET", "/api/profile-snapshots", async (_req, res) => {
+  json(res, 200, { snapshots: listSnapshots(db) });
+});
+
+route("GET", "/api/profile-snapshots/:id/profile.json", async (_req, res, p) => {
+  sendProfile(res, snapshotDownload(db, Number(p.id)));
 });
 
 route("POST", "/api/shots/:id/print", async (_req, res, p) => {

@@ -39,7 +39,8 @@ function readout(plot, container, meta) {
     const idx = u.cursor.idx;
     if (idx == null) return idle();
     xCell.textContent = meta[0].x ? meta[0].x(u.data[0][idx]) : ""; xCell.hidden = !xCell.textContent;
-    meta.forEach((m, i) => { const v = u.data[m.series][idx]; cells[i].textContent = v == null ? "–" : m.fmt(v); });
+    // `alt`: the same quantity drawn as a second series (the tail after the extraction).
+    meta.forEach((m, i) => { const v = u.data[m.series][idx] ?? (m.alt != null ? u.data[m.alt][idx] : null); cells[i].textContent = v == null ? "–" : m.fmt(v); });
   });
   return row;
 }
@@ -64,9 +65,12 @@ function holdEdges(values) {
  * Shot curves: pressure + flow on the left axis (bar / ml·s share a 0–12
  * range naturally), temperature on the right, weight on a third hidden scale.
  * Phases drawn as faint bands behind everything. `compare` overlays a second
- * shot's pressure and flow, dimmed.
+ * shot's pressure and flow, dimmed. `targets` adds what the machine was asked
+ * for at each moment, dotted: pressure, temperature, and flow — which is a
+ * pump flow target, so the pump's own flow comes with it; the puck flow drawn
+ * by default lags it by the whole preinfusion.
  */
-export function shotChart(container, shot, compare = null, { stableWeight = null } = {}) {
+export function shotChart(container, shot, compare = null, { stableWeight = null, targets = false } = {}) {
   const c = colors();
   const pts = shot.full_curve;
   const x = pts.map((p) => p.time_seconds);
@@ -103,6 +107,43 @@ export function shotChart(container, shot, compare = null, { stableWeight = null
       { label: "ml/s ⁽²⁾", stroke: c.flow, width: 1, dash: [3, 4], alpha: 0.4, scale: "y", value: (u, v) => (v == null ? "" : v.toFixed(2)) },
     );
   }
+  // Archives from before setpoints were exposed have no target fields at all.
+  const targetMeta = [];
+  if (targets && pts.some((p) => "target_pressure_bar" in p)) {
+    const add = (values, style, meta) => {
+      data.push(values);
+      series.push({ width: 1.25, dash: [2, 3], value: (u, v) => (v == null ? "" : v.toFixed(1)), ...style });
+      targetMeta.push({ series: data.length - 1, idle: "", ...meta });
+    };
+    add(pts.map((p) => p.target_pressure_bar ?? null), { label: "bar ⁽ᵗ⁾", stroke: c.pressure, scale: "y" },
+      { name: t("shot.target_pressure"), label: "bar", color: c.pressure, fmt: (v) => v.toFixed(1) });
+    add(pts.map((p) => p.target_flow_ml_s ?? null), { label: "ml/s ⁽ᵗ⁾", stroke: c.flow, scale: "y" },
+      { name: t("shot.target_flow"), label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(1) });
+    add(pts.map((p) => p.pump_flow_ml_s ?? null), { label: "ml/s ⁽ᵖ⁾", stroke: c.flow, scale: "y", dash: undefined, width: 1, alpha: 0.45 },
+      { name: t("shot.pump_flow"), label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(2) });
+    add(pts.map((p) => p.target_temperature_c ?? null), { label: "°C ⁽ᵗ⁾", stroke: c.temp, scale: "t" },
+      { name: t("shot.target_temperature"), label: "°C", color: c.temp, fmt: (v) => v.toFixed(1) });
+  }
+
+  // After the controller stops, the log runs on for 2–3 s with the pump off
+  // and the valve closed; the pressure sensor reads the boiler climbing
+  // towards the OPV, not the puck. That pressure is drawn on, but faint and
+  // dashed, so it is not read as the shot; flow, temperature and weight are
+  // still real (the cup still fills) and stay as they are. The boundary
+  // sample belongs to both halves, so the line is continuous.
+  const tails = {};
+  const end = shot.metadata?.extraction_end_seconds;
+  if (end != null && x.some((t) => t > end)) {
+    const cut = x.findIndex((t) => t > end) - 1;
+    const tailStyle = { width: 1.25, dash: [2, 4], alpha: 0.45 };
+    for (const [i, key, scale, label] of [[1, "p", "y", "bar"]]) {
+      const whole = data[i];
+      data[i] = whole.map((v, k) => (k <= cut ? v : null));
+      data.push(whole.map((v, k) => (k >= cut ? v : null)));
+      series.push({ label: label + " ⁽…⁾", stroke: series[i].stroke, scale, value: series[i].value, ...tailStyle });
+      tails[key] = data.length - 1;
+    }
+  }
 
   const phases = shot.phases || [];
   const bandColors = ["#4d6b8a", "#5c7b57", "#8a6a3a", c.accent, "#a06a4e"];
@@ -138,14 +179,15 @@ export function shotChart(container, shot, compare = null, { stableWeight = null
   // stable weight — not the curve's maximum, which on a self-taring scale is
   // the pre-tare reading from the first second (181.8 g on shot 415).
   const meta = [
-    { series: 1, name: t("shot.pressure"), label: "bar", color: c.pressure, fmt: (v) => v.toFixed(1), idle: sm.pressure ? `⌃ ${sm.pressure.max_bar.toFixed(1)}` : "–", x: (x) => `${x.toFixed(1)} s` },
-    { series: 2, name: t("shot.flow"), label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(2), idle: sm.flow ? `⌀ ${sm.flow.average_flow_rate_ml_s.toFixed(2)}` : "–" },
-    { series: 3, name: t("shot.temperature"), label: "°C", color: c.temp, fmt: (v) => v.toFixed(1), idle: sm.temperature ? `⌀ ${sm.temperature.average_celsius.toFixed(1)}` : "–" },
+    { series: 1, alt: tails.p, name: t("shot.pressure"), label: "bar", color: c.pressure, fmt: (v) => v.toFixed(1), idle: sm.pressure ? `⌃ ${sm.pressure.max_bar.toFixed(1)}` : "–", x: (x) => `${x.toFixed(1)} s` },
+    { series: 2, alt: tails.f, name: t("shot.flow"), label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(2), idle: sm.flow ? `⌀ ${sm.flow.average_flow_rate_ml_s.toFixed(2)}` : "–" },
+    { series: 3, alt: tails.t, name: t("shot.temperature"), label: "°C", color: c.temp, fmt: (v) => v.toFixed(1), idle: sm.temperature ? `⌀ ${sm.temperature.average_celsius.toFixed(1)}` : "–" },
     { series: 4, name: t("shot.weight"), label: "g", color: c.weight, fmt: (v) => v.toFixed(1), idle: stableWeight != null ? `→ ${stableWeight.toFixed(1)}` : "–" },
   ];
   if (compare?.full_curve) meta.push(
     { series: 5, name: t("shot.pressure") + " ⁽²⁾", label: "bar", color: c.pressure, fmt: (v) => v.toFixed(1), idle: "" },
     { series: 6, name: t("shot.flow") + " ⁽²⁾", label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(2), idle: "" });
+  meta.push(...targetMeta);
   readout(plot, container, meta);
   return responsive(plot, container);
 }

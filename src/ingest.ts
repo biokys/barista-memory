@@ -8,6 +8,7 @@ import { recomputeAnalysis } from "./anomaly.js";
 import { powerSessions, machineContextForShot, allStateSamples, coldBaseline } from "./machineState.js";
 import { syncNotes } from "./notesSync.js";
 import { classifyShots, utilityProfileIds } from "./maintenance.js";
+import { captureProfileSnapshots } from "./profileSnapshots.js";
 
 
 /** The stable weight for one shot, or the raw figure if the log cannot be read. */
@@ -139,6 +140,8 @@ export interface IngestResult {
   newCoffeeIds: number[];
   /** Shots whose notes were copied from the device in this pass. */
   notesCaptured: number;
+  /** Shots that got the profile version they were pulled with. */
+  profilesCaptured: number;
   failures: Array<{ shotId: number; reason: string }>;
 }
 
@@ -197,6 +200,7 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
     classified: 0,
     newCoffeeIds: [],
     notesCaptured: 0,
+    profilesCaptured: 0,
     failures: [],
   };
 
@@ -343,8 +347,19 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
 
   result.notesCaptured = await captureDeviceNotes(db, onDevice, rerated, new Map(archivedRows.map((r) => [r.id, r.device_notes_at])));
 
+  // Before the analysis, which reads phase types from the snapshot. Runs every
+  // pass, not only when something is new: a shot archived while the machine
+  // stopped answering is retried until its capture window closes. A shot
+  // that was analysed on an earlier pass without its snapshot is analysed
+  // again, or its stored flags would keep the name-based preinfusion.
+  const captured = await captureProfileSnapshots(db);
+  result.profilesCaptured = captured.length;
+  if (captured.length) {
+    db.prepare("DELETE FROM shot_analysis WHERE shot_id IN (SELECT value FROM json_each(?))").run(JSON.stringify(captured));
+  }
+
   // Curves are judged once the kind is known, so a flush is never analysed.
-  if (sawNew) recomputeAnalysis(db);
+  if (sawNew || captured.length) recomputeAnalysis(db);
 
   return result;
 }

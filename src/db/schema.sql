@@ -280,3 +280,36 @@ CREATE TABLE IF NOT EXISTS machine_state (
 );
 
 CREATE INDEX IF NOT EXISTS machine_state_reachable ON machine_state (reachable, sampled_at);
+
+-- Every version of every profile a shot was pulled with, stored once.
+--
+-- The machine keeps only the current profile, and the .slog names its phases
+-- but not their type or exit conditions. A profile is edited in place and
+-- a phase added at the front renumbers every later one, so reading an old
+-- shot against today's profile gives the wrong phases; only a copy taken
+-- when the shot was pulled says what was planned. Also the archive's backup
+-- of the profiles themselves, which the machine has no history of.
+--
+-- content_hash is over the profile with selected and favorite removed: which
+-- profile is selected is not a new version of it.
+CREATE TABLE IF NOT EXISTS profile_snapshots (
+  id            INTEGER PRIMARY KEY,
+  profile_id    TEXT NOT NULL,
+  label         TEXT,
+  content_hash  TEXT NOT NULL UNIQUE,
+  profile_json  TEXT NOT NULL,          -- verbatim as the machine returned it
+  first_seen_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS profile_snapshots_profile ON profile_snapshots (profile_id, first_seen_at);
+
+-- Which profile version a shot was pulled with. A table of its own rather than
+-- a column on shots so that the shots table is untouched and an older build
+-- reads this database unchanged. No row: not captured (archived later than
+-- the capture window, or the profile no longer matched the log) — never a
+-- guess from the current profile.
+CREATE TABLE IF NOT EXISTS shot_profiles (
+  shot_id     INTEGER PRIMARY KEY REFERENCES shots (id) ON DELETE CASCADE,
+  snapshot_id INTEGER NOT NULL REFERENCES profile_snapshots (id),
+  captured_at INTEGER NOT NULL
+);

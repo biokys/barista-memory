@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { parseSlog } from "./device/client.js";
 import { transformShotForAI } from "./device/shotTransformer.js";
+import { preinfusionPhasesOf, snapshotForShot } from "./profileSnapshots.js";
 
 /**
  * What a shot's own curve says went wrong, and how far it strays from the
@@ -11,7 +12,7 @@ import { transformShotForAI } from "./device/shotTransformer.js";
  * recomputes every row at start, the same way stable weights are re-derived.
  */
 
-export const ANALYSIS_VERSION = 2;
+export const ANALYSIS_VERSION = 3;
 
 export type Flag = "channeling" | "choked" | "low_pressure" | "temperature_unstable" | "off_pattern";
 
@@ -49,13 +50,19 @@ const OFF_PATTERN = 0.4;
 interface Point { time_seconds: number; pressure_bar: number; flow_ml_s: number; temperature_c: number; weight_g: number }
 interface Phase { name: string; start_time_seconds: number; duration_seconds: number }
 
-function curveOf(slog: Uint8Array, shotId: number) {
-  const shot = transformShotForAI(parseSlog(Buffer.from(slog), shotId), true);
+function curveOf(db: DatabaseSync, slog: Uint8Array, shotId: number) {
+  // Phase types from the profile version the shot was pulled with, where one
+  // was archived; the transformer falls back to phase names otherwise.
+  const snapshot = snapshotForShot(db, shotId);
+  const shot = transformShotForAI(parseSlog(Buffer.from(slog), shotId), true, snapshot ? { preinfusionPhases: preinfusionPhasesOf(snapshot.profile) } : {});
   return {
     points: (shot.full_curve ?? []) as Point[],
     phases: (shot.phases ?? []) as Phase[],
     preinfusion_s: shot.summary.extraction.preinfusion_time_seconds,
     duration_s: shot.metadata.duration_seconds,
+    // Where the controller stopped; the pressure after it is valve and boiler,
+    // not the puck. Logs without setpoints fall back to two seconds short of the end.
+    end_s: shot.metadata.extraction_end_seconds ?? Math.max(0, shot.metadata.duration_seconds - 2),
     first_drip_s: shot.summary.flow.time_to_first_drip_seconds,
     max_bar: shot.summary.pressure.max_bar,
   };
@@ -68,7 +75,7 @@ function curveOf(slog: Uint8Array, shotId: number) {
  */
 function mainWindow(c: ReturnType<typeof curveOf>): [number, number] {
   const decline = c.phases.find((p) => /decline|taper|ramp.?down|down/i.test(p.name));
-  const end = decline ? decline.start_time_seconds : Math.max(0, c.duration_s - 2);
+  const end = decline ? decline.start_time_seconds : c.end_s;
   return [c.preinfusion_s, end];
 }
 
@@ -145,7 +152,7 @@ function deviationFrom(db: DatabaseSync, shotId: number, own: ReturnType<typeof 
     .all(context.coffee_id, context.grind_setting, context.dose_g, context.profile_id, context.started_at, BASELINE_MAX) as Array<{ id: number; raw_slog: Uint8Array }>;
   if (peers.length < BASELINE_MIN) return { deviation: null, baseline_shots: peers.length };
 
-  const curves = peers.map((p) => curveOf(p.raw_slog, p.id));
+  const curves = peers.map((p) => curveOf(db, p.raw_slog, p.id));
   const length = Math.min(GRID_MAX_S, own.duration_s - own.preinfusion_s, ...curves.map((c) => c.duration_s - c.preinfusion_s));
   if (length < 5) return { deviation: null, baseline_shots: peers.length };
   const ownGrid = onGrid(own.points, own.preinfusion_s, length);
@@ -157,7 +164,7 @@ function deviationFrom(db: DatabaseSync, shotId: number, own: ReturnType<typeof 
 }
 
 export function analyseShot(db: DatabaseSync, shotId: number, slog: Uint8Array): Analysis {
-  const own = curveOf(slog, shotId);
+  const own = curveOf(db, slog, shotId);
   const flags = ownFlags(own);
   const { deviation, baseline_shots } = deviationFrom(db, shotId, own);
   if (deviation != null && deviation > OFF_PATTERN) flags.push("off_pattern");

@@ -185,6 +185,26 @@ path printed shot 415 (`systemctl disable --now c19-autoprint`); it is kept
 only as a reference driver. The printer sleeps: "not seen by Bluetooth"
 means switch it on, not a bug. Only one print at a time per process.
 
+**A shot's profile is archived only while it can still be the right one.**
+The `.slog` names the phases that ran (`phaseNumber` = index in the profile)
+but not their type or exit conditions, and a profile is edited in place: a
+Fill added to "Gentle and sweet (tuned)" renumbered every later phase.
+`profileSnapshots.ts` fetches the profile within 10 minutes of the shot's
+end and stores it (`profile_snapshots`, deduplicated by a hash that ignores
+`selected`/`favorite`; linked through `shot_profiles`, not a column on
+`shots`, so an older build reads the database unchanged) only if the phase
+names and the setpoints recorded in the samples agree with it. Never attach
+today's profile to an older shot. Phase names in the `.slog` are UTF-8 read
+as Latin-1 by the vendored parser; compare through `asLogged()`.
+
+**Pressure after the extraction is the boiler's, not the puck's.** The log
+runs on for 2–3 s after the controller stops (target pressure and flow both
+0); the valve is closed and the sensor climbs towards the OPV (shot 52: 9.8
+bar after a 6.2 bar extraction). Pressure statistics stop at
+`metadata.extraction_end_seconds`, the chart draws that pressure dashed and
+the receipt not at all. Flow, temperature and weight run to the end — the
+cup still fills.
+
 **Notes sync compares a fingerprint before touching the machine.** `notes_sync`
 stores the archive-side inputs each push was built from; a pass where they are
 unchanged opens no WebSocket. Before that, every pass cost one connection per

@@ -72,9 +72,9 @@ async function main(): Promise<void> {
     try {
       const result = await ingestOnce(db);
       newCoffees = result.newCoffeeIds;
-      if (result.archived > 0 || result.notesSynced > 0 || result.notesCaptured > 0 || result.failures.length > 0) {
+      if (result.archived > 0 || result.notesSynced > 0 || result.notesCaptured > 0 || result.profilesCaptured > 0 || result.failures.length > 0) {
         console.log(
-          `archived=${result.archived} notes=${result.notesSynced} captured=${result.notesCaptured} ` +
+          `archived=${result.archived} notes=${result.notesSynced} captured=${result.notesCaptured} profiles=${result.profilesCaptured} ` +
             `skipped=${result.skipped} failures=${result.failures.length}`
         );
         for (const failure of result.failures) {

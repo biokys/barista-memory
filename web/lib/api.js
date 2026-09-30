@@ -35,6 +35,7 @@ export const api = {
   profile: (id) => call("GET", `api/profiles/${id}`),
   selectProfile: (id) => call("POST", `api/profiles/${id}/select`),
   saveProfile: (id, spec) => call("PUT", `api/profiles/${id}`, spec),
+  profileSnapshots: () => call("GET", "api/profile-snapshots"),
   stats: () => call("GET", "api/stats"),
   events: () => call("GET", "api/events"),
   recordEvent: (e) => call("POST", "api/events", e),
