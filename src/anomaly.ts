@@ -11,7 +11,7 @@ import { transformShotForAI } from "./device/shotTransformer.js";
  * recomputes every row at start, the same way stable weights are re-derived.
  */
 
-export const ANALYSIS_VERSION = 1;
+export const ANALYSIS_VERSION = 2;
 
 export type Flag = "channeling" | "choked" | "low_pressure" | "temperature_unstable" | "off_pattern";
 
@@ -96,7 +96,13 @@ function ownFlags(c: ReturnType<typeof curveOf>): Flag[] {
     }
   }
 
-  const temps = main.map((p) => p.temperature_c).filter((t) => t > 0);
+  // Temperature is judged to the end of the shot, not only up to a decline:
+  // a lowered pressure cannot fake a swing the way it fakes a channel, and on
+  // a "Hold > Decline" profile the decline is most of the shot.
+  const temps = c.points
+    .filter((p) => p.time_seconds >= from && p.time_seconds <= Math.max(from, c.duration_s - 2))
+    .map((p) => p.temperature_c)
+    .filter((t) => t > 0);
   if (temps.length > 4 && Math.max(...temps) - Math.min(...temps) > TEMP_SWING_C) flags.push("temperature_unstable");
   return flags;
 }

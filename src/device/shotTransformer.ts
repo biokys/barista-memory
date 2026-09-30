@@ -143,10 +143,14 @@ function calculateSummary(shot: ShotData): ShotSummary {
   // Calculate preinfusion time (based on phases if available)
   let preinfusionTime = 0;
   if (shot.phases.length > 0) {
-    // Find the end of preinfusion phases (usually phase 0, 1, and sometimes 2 for soak)
+    // Find the end of preinfusion phases (usually phase 0, 1, and sometimes 2 for soak).
+    // The .slog keeps only the phase's name, not its type, so the name is all
+    // there is: fold case and drop separators so "Pre-infusion" matches, and
+    // count a leading fill or bloom too — "Fill > Pre-infusion > Hold" read as
+    // 0 s of preinfusion.
     for (const phase of shot.phases) {
-      if (phase.phaseName.toLowerCase().includes('preinfusion') || 
-          phase.phaseName.toLowerCase().includes('soak')) {
+      const name = phase.phaseName.toLowerCase().replace(/[^a-z]/g, '');
+      if (/preinfusion|soak|fill|bloom/.test(name)) {
         const phaseEndIndex = shot.phases.indexOf(phase) < shot.phases.length - 1 
           ? shot.phases[shot.phases.indexOf(phase) + 1].sampleIndex 
           : shot.samples.length;
