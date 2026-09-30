@@ -76,6 +76,7 @@
   "shot.time": "Čas",
   "shot.preinfusion": "preinfuze",
   "shot.temp": "Teplota",
+  "shot.in_window": "v rozsahu",
   "shot.peak": "Špička",
   "shot.decline": "decline →",
   "shot.machine": "Stroj",

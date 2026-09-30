@@ -102,6 +102,81 @@ function phaseList(shot, plan) {
   return `<table class="cmp" style="margin-top:10px"><tbody>${rows}</tbody></table>`;
 }
 
+/**
+ * How far a fact landed from its target, as a pill: the target in muted text,
+ * then the signed difference coloured by how much it matters. Only facts that
+ * have a target get one — temperature and pressure from the setpoints in the
+ * log, time and ratio from the coffee's own targets (the dial-in's).
+ */
+function signed(d, decimals) {
+  const r = Number(d.toFixed(decimals));
+  return r === 0 ? "±0" : `${r > 0 ? "+" : "−"}${Math.abs(r).toFixed(decimals)}`;
+}
+function vsTarget(targetText, pill) {
+  return ` <span class="muted">· ${t("machine.target")} ${targetText}</span> ${pill}`;
+}
+/** Tone by size of a miss: within `ok` is on target, within `warn` a nudge, beyond it a real miss. */
+function band(miss, ok, warn) {
+  const a = Math.abs(miss);
+  return a <= ok ? "ok" : a <= warn ? "warn" : "bad";
+}
+
+function temperatureTarget(shot) {
+  const actual = shot?.summary.temperature.average_celsius, target = shot?.summary.temperature.target_average;
+  if (!Number.isFinite(actual) || !Number.isFinite(target)) return "";
+  const d = actual - target;
+  return vsTarget(`${target.toFixed(1)} °C`, `<span class="pill ${band(d, 1, 2)}">${signed(d, 1)} °C</span>`);
+}
+
+/**
+ * Peak pressure against the highest pressure setpoint of the extraction. Flow
+ * phases carry no pressure setpoint (null in the log), so a flow-driven shot
+ * is compared only with what a pressure phase asked for, or not at all.
+ */
+function pressureTarget(shot, peak) {
+  if (!shot?.full_curve || peak == null) return "";
+  const end = shot.metadata?.extraction_end_seconds ?? Infinity;
+  const setpoints = shot.full_curve.filter((s) => s.time_seconds <= end && s.target_pressure_bar != null).map((s) => s.target_pressure_bar);
+  if (!setpoints.length) return "";
+  const target = Math.max(...setpoints);
+  const d = peak - target;
+  return vsTarget(`${target.toFixed(1)} bar`, `<span class="pill ${band(d, 0.5, 1.5)}">${signed(d, 1)} bar</span>`);
+}
+
+/**
+ * Time against the coffee's window. Inside it there is no deviation to show;
+ * outside, the distance to the nearer edge, graded as the dial-in grades it
+ * (half the window's width separates a nudge from a big step).
+ */
+function timeTarget(seconds, targets) {
+  const min = targets?.time_min_s ?? null, max = targets?.time_max_s ?? null;
+  if (seconds == null || (min == null && max == null)) return "";
+  const range = min != null && max != null ? `${min}–${max} s` : min != null ? `≥ ${min} s` : `≤ ${max} s`;
+  const width = min != null && max != null ? Math.max(1, max - min) : 10;
+  const miss = min != null && seconds < min ? seconds - min : max != null && seconds > max ? seconds - max : 0;
+  const pill = miss === 0
+    ? `<span class="pill ok">${t("shot.in_window")}</span>`
+    : `<span class="pill ${Math.abs(miss) > width * 0.5 ? "bad" : "warn"}">${signed(miss, 1)} s</span>`;
+  return vsTarget(range, pill);
+}
+
+/**
+ * Cup weight and ratio against the coffee's target ratio: the weight the
+ * dose should have made, and the difference in grams. ±10 % of the ratio is
+ * on target, as in the dial-in; twice that is a real miss.
+ */
+function cupTarget(c, targets) {
+  const ratio = targets?.ratio ?? null;
+  if (ratio == null || c.ratio == null) return "";
+  const rel = c.ratio / ratio - 1;
+  const tone = band(rel, 0.1, 0.2);
+  const targetG = c.dose_g != null ? ratio * c.dose_g : null;
+  const pill = targetG != null && c.stable_weight_g != null
+    ? `${signed(c.stable_weight_g - targetG, 1)} g`
+    : signed(c.ratio - ratio, 2);
+  return `<br><span class="small">${vsTarget(`${targetG != null ? fmt.g(targetG) + " · " : ""}${fmt.ratio(ratio)}`, `<span class="pill ${tone}">${pill}</span>`).trim()}</span>`;
+}
+
 /** What was typed into the machine's own web UI for this shot, if anything. */
 function deviceNoteLine(notes) {
   const text = typeof notes?.notes === "string" ? notes.notes.trim() : "";
@@ -167,10 +242,10 @@ export async function renderShot(view, [id]) {
         <dl class="kv">
           <dt>${t("shot.bean")}</dt><dd>${c.bean ?? "–"}${c.roaster ? ` <span class="muted">· ${c.roaster}</span>` : ""}</dd>
           <dt>${t("shot.grind")}</dt><dd class="num">${c.grind_setting ?? "–"} <span class="muted">· ${t("shot.dose").toLowerCase()} ${c.dose_g ?? "–"} g</span></dd>
-          <dt>${t("shot.cup")}</dt><dd class="num">${fmt.g(c.stable_weight_g)} <span class="muted">· ${t("shot.ratio").toLowerCase()} ${fmt.ratio(c.ratio)}</span><br><span class="faint small">${weightNote}</span></dd>
-          <dt>${t("shot.time")}</dt><dd class="num">${fmt.seconds(c.duration_ms / 1000)}${shot ? ` <span class="muted">(${t("shot.preinfusion")} ${shot.summary.extraction.preinfusion_time_seconds.toFixed(0)} s)</span>` : ""}</dd>
-          <dt>${t("shot.temp")}</dt><dd class="num">${shot ? fmt.temp(shot.summary.temperature.average_celsius) : "–"} <span class="muted">· ${t("machine.target")} ${shot?.summary.temperature.target_average ?? "–"}</span></dd>
-          <dt>${t("shot.peak")}</dt><dd class="num">${fmt.bar(peak)}${dec != null ? ` <span class="muted">· ${t("shot.decline")} ${dec.toFixed(1)}</span>` : ""}</dd>
+          <dt>${t("shot.cup")}</dt><dd class="num">${fmt.g(c.stable_weight_g)} <span class="muted">· ${t("shot.ratio").toLowerCase()} ${fmt.ratio(c.ratio)}</span>${cupTarget(c, data.verdict?.targets)}<br><span class="faint small">${weightNote}</span></dd>
+          <dt>${t("shot.time")}</dt><dd class="num">${fmt.seconds(c.duration_ms / 1000)}${shot ? ` <span class="muted">(${t("shot.preinfusion")} ${shot.summary.extraction.preinfusion_time_seconds.toFixed(0)} s)</span>` : ""}${timeTarget(c.duration_ms != null ? c.duration_ms / 1000 : null, data.verdict?.targets)}</dd>
+          <dt>${t("shot.temp")}</dt><dd class="num">${shot ? fmt.temp(shot.summary.temperature.average_celsius) : "–"}${temperatureTarget(shot)}</dd>
+          <dt>${t("shot.peak")}</dt><dd class="num">${fmt.bar(peak)}${pressureTarget(shot, peak)}${dec != null ? ` <span class="muted">· ${t("shot.decline")} ${dec.toFixed(1)}</span>` : ""}</dd>
           <dt>${t("shot.era")}</dt><dd>${data.era ? `<span class="pill accent">${t("events.kind." + data.era.kind)}</span> ${t("shot.era_since", { title: data.era.title, n: data.era.shots_since })}` : `<span class="faint">${t("shot.era_none")}</span>`}</dd>
           <dt>${t("shot.machine")}</dt><dd>${m ? `<span class="num">${t("machine.heating_for")} ${fmt.duration(m.heating_for_s)}</span> <span class="pill ${readiness}">${fmt.pct(m.settledness)}</span>` : `<span class="faint">${t("machine.unknown")}</span>`}</dd>
           <dt>${t("anomaly.title")}</dt><dd>${(data.analysis?.flags || []).length ? data.analysis.flags.map((f) => `<span class="pill ${f === "off_pattern" ? "warn" : "bad"}" title="${t("anomaly.hint." + f)}">${t("anomaly." + f)}</span>`).join(" ") : `<span class="${data.analysis ? "ok" : "faint"}">${data.analysis ? t("anomaly.none") : t("anomaly.pending")}</span>`}${data.analysis?.deviation != null ? ` <span class="faint small num">${t("anomaly.deviation", { pct: Math.round(data.analysis.deviation * 100), n: data.analysis.baseline_shots })}</span>` : ""}</dd>
