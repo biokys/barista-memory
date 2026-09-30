@@ -134,19 +134,18 @@ export function shotChart(container, shot, compare = null, { stableWeight = null
   };
   const targetMeta = [];
   if (targets && pts.some((p) => "target_pressure_bar" in p)) {
-    const add = (values, style, meta) => {
+    // The setpoints themselves get no readout cell: the deviation shown beside
+    // each measured value says the same, and three more cells crowded the row.
+    const add = (values, style, meta = null) => {
       data.push(values);
       series.push({ width: 1.25, dash: [2, 3], value: (u, v) => (v == null ? "" : v.toFixed(1)), ...style });
-      targetMeta.push({ series: data.length - 1, idle: "", ...meta });
+      if (meta) targetMeta.push({ series: data.length - 1, idle: "", ...meta });
     };
-    add(pts.map((p) => p.target_pressure_bar ?? null), { label: "bar ⁽ᵗ⁾", stroke: c.pressure, scale: "y" },
-      { name: t("shot.target_pressure"), label: "bar", color: c.pressure, fmt: (v) => v.toFixed(1) });
-    add(pts.map((p) => p.target_flow_ml_s ?? null), { label: "ml/s ⁽ᵗ⁾", stroke: c.flow, scale: "y" },
-      { name: t("shot.target_flow"), label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(1) });
+    add(pts.map((p) => p.target_pressure_bar ?? null), { label: "bar ⁽ᵗ⁾", stroke: c.pressure, scale: "y" });
+    add(pts.map((p) => p.target_flow_ml_s ?? null), { label: "ml/s ⁽ᵗ⁾", stroke: c.flow, scale: "y" });
     add(pts.map((p) => p.pump_flow_ml_s ?? null), { label: "ml/s ⁽ᵖ⁾", stroke: c.flow, scale: "y", dash: undefined, width: 1, alpha: 0.45 },
       { name: t("shot.pump_flow"), label: "ml/s", color: c.flow, fmt: (v) => v.toFixed(2), dev: setpoint.flow });
-    add(pts.map((p) => p.target_temperature_c ?? null), { label: "°C ⁽ᵗ⁾", stroke: c.temp, scale: "t" },
-      { name: t("shot.target_temperature"), label: "°C", color: c.temp, fmt: (v) => v.toFixed(1) });
+    add(pts.map((p) => p.target_temperature_c ?? null), { label: "°C ⁽ᵗ⁾", stroke: c.temp, scale: "t" });
   }
 
   // After the controller stops, the log runs on for 2–3 s with the pump off
