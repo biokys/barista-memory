@@ -166,7 +166,7 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
 
   const archivedRows = db
     .prepare(
-      `SELECT id, device_id, started_at, incomplete, raw_slog IS NOT NULL AS has_log,
+      `SELECT id, device_id, started_at, incomplete, length(raw_slog) > 0 AS has_log,
               device_rating, device_notes_at FROM shots`
     )
     .all() as Array<{
@@ -249,6 +249,10 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
           if (slog && slog.length > 0) {
             const derived = deriveWeight(slog, entry.id, entry.volume);
             heal.run(entry.duration, entry.volume, derived.weight, derived.source, entry.rating || null, slog, match.id);
+            // The row was analysed on its header-only log; recomputeAnalysis()
+            // skips a current-version row, so the stale result must go.
+            db.prepare("DELETE FROM shot_analysis WHERE shot_id = ?").run(match.id);
+            db.prepare("DELETE FROM shot_profiles WHERE shot_id = ?").run(match.id);
             result.archived++;
             fresh.push(match.id);
             sawNew = true;
@@ -314,7 +318,9 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
   // Flush or coffee, and how much water: asked of the machine's profile list
   // only when there is something new to classify, so a quiet pass costs no
   // extra request.
-  if (sawNew || db.prepare("SELECT 1 FROM shots WHERE water_ml IS NULL LIMIT 1").get()) {
+  // A row without a log is never classified, so it must not count as pending
+  // or every quiet pass would open a WebSocket for the profile list.
+  if (sawNew || db.prepare("SELECT 1 FROM shots WHERE water_ml IS NULL AND raw_slog IS NOT NULL LIMIT 1").get()) {
     const utility = await utilityProfileIds();
     result.classified = classifyShots(db, utility, (slog, id) => parseSlog(slog, id).samples);
   }

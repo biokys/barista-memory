@@ -207,7 +207,7 @@ export function parseBinaryShot(buffer: Buffer, id: string): ShotData {
   // stride. The version is only the fallback, for a truncated file where the
   // payload no longer divides evenly.
   const payloadSize = view.byteLength - actualHeaderSize;
-  let tickIsUint32 = hasTick && version >= 7;
+  let tickIsUint32 = hasTick && version >= 6;
   if (hasTick && sampleCount > 0 && payloadSize > 0) {
     const observedStride = payloadSize / sampleCount;
     if (Number.isInteger(observedStride)) {

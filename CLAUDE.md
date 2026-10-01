@@ -86,7 +86,7 @@ exists because there is no other way to know when it was switched on.
 `github.com/biokys/gaggimate-mcp`, which in turn mirrors the firmware's
 `shot_log_format.h`.
 
-They were once a version behind the firmware: `.slog` v7 widened the tick field
+They were once a version behind the firmware: `.slog` v6 widened the tick field
 from uint16 to uint32, and the old layout shifted every field after it and
 shortened the record stride, so the tail of every shot decoded as garbage — an
 unwritten `0xFFFF` reads as 6553.5 bar or 6553.4 °C. **If temperatures or
