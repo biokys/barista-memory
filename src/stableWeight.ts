@@ -23,10 +23,31 @@ const MAX_PLAUSIBLE_RATE_G_S = 5.0;
 /**
  * The machine tares the scale itself shortly after the shot starts, so early
  * samples can read whatever was sitting on it — 181.9 g on shots 407 and 408.
- * Everything up to the last near-zero reading inside this window is discarded.
+ * Everything before the last fall to near zero inside this window is discarded.
  */
 const TARE_WINDOW_S = 12.0;
 const TARE_THRESHOLD_G = 1.0;
+
+/**
+ * Index of the first post-tare sample: the last reading in the window that
+ * fell to near zero from above, or 0 when the scale was never above it.
+ *
+ * A fall, not merely a low reading: the first drops land well inside the
+ * window, and taking the last reading ≤ 1 g as the tare cut shot 59's curve
+ * at the moment the cup reached 1.0 g, so the chart started there.
+ */
+function tareIndex(points: Array<{ t: number | null; v: number | null }>): number {
+  let start = 0;
+  let previous: number | null = null;
+  for (let i = 0; i < points.length; i++) {
+    const { t, v } = points[i];
+    if (t == null || v == null) continue;
+    if (t > TARE_WINDOW_S) break;
+    if (previous != null && previous > TARE_THRESHOLD_G && v <= TARE_THRESHOLD_G) start = i;
+    previous = v;
+  }
+  return start;
+}
 
 /**
  * Coffee in the cup does not leave it. A reading this far below what has
@@ -73,10 +94,7 @@ export function cleanWeightSeries(samples: ShotSample[]): Array<number | null> {
   }));
   if (points.every((p) => p.v == null || p.v === 0)) return out;
 
-  let start = 0;
-  for (const p of points) {
-    if (p.t != null && p.v != null && p.t <= TARE_WINDOW_S && p.v <= TARE_THRESHOLD_G) start = p.i;
-  }
+  const start = tareIndex(points);
 
   let last: { t: number; v: number } | null = null;
   for (const p of points.slice(start)) {
@@ -102,10 +120,7 @@ function weightFromCurve(samples: ShotSample[]): { weight: number | null; reject
   }
 
   // Start after the machine's own tare rather than at the first sample.
-  let start = 0;
-  for (let i = 0; i < points.length; i++) {
-    if (points[i].t <= TARE_WINDOW_S && points[i].v <= TARE_THRESHOLD_G) start = i;
-  }
+  const start = tareIndex(points);
 
   let last: { t: number; v: number } | null = null;
   let rejected = 0;
