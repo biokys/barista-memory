@@ -7,7 +7,8 @@ import { mountChat, esc } from "../lib/assistant.js";
 function declineEnd(shot) {
   const d = (shot.phases || []).find((p) => p.name === "Decline");
   if (!d || !shot.full_curve) return null;
-  const end = d.start_time_seconds + d.duration_seconds;
+  // Not past the end of the extraction: the pressure after it is the boiler's.
+  const end = Math.min(d.start_time_seconds + d.duration_seconds, shot.metadata?.extraction_end_seconds ?? Infinity);
   const inPhase = shot.full_curve.filter((s) => s.time_seconds >= d.start_time_seconds && s.time_seconds <= end).map((s) => s.pressure_bar);
   return inPhase.length ? Math.min(...inPhase) : null;
 }
@@ -56,6 +57,60 @@ function compareTable(a, b) {
     </table>`;
 }
 
+const TARGETS_KEY = "barista.shot.targets";
+/** Setpoints are shown unless this viewer switched them off; storage may be unavailable. */
+function targetsOn() {
+  try { return localStorage.getItem(TARGETS_KEY) !== "0"; } catch { return true; }
+}
+function rememberTargets(on) {
+  try { localStorage.setItem(TARGETS_KEY, on ? "1" : "0"); } catch { /* a private window keeps the default */ }
+}
+
+/** A phase name translated where the dictionary knows it ("Hold"), verbatim otherwise ("Fill"). */
+function phaseName(name) {
+  const key = "shot.phase." + name;
+  return t(key) === key ? name : t(key);
+}
+
+const EXIT_UNITS = { pressure: "bar", volumetric: "g", pumped: "ml", flow: "ml/s" };
+function exitText(exit) {
+  const key = "shot.exit." + exit.type;
+  const name = t(key) === key ? exit.type : t(key);
+  return `${name} ${exit.operator === "lte" ? "≤" : "≥"} ${exit.value} ${EXIT_UNITS[exit.type] ?? ""}`.trim();
+}
+
+/**
+ * The phases from the profile version archived with the shot: what each was
+ * (preinfusion or brew), when it would have ended, and which never ran —
+ * shot 50's preinfusion was skipped because 9.9 bar was already there.
+ * Without a snapshot, the phases as the log names them.
+ */
+function phaseList(shot, plan) {
+  if (!plan) {
+    return `<div class="row small faint" style="margin-top:6px;gap:18px">${(shot.phases || []).map((p) => `<span>${phaseName(p.name)} <b class="num muted">${p.duration_seconds.toFixed(1)} s</b> · ${p.avg_pressure_bar.toFixed(1)} bar · ${p.avg_temperature_c.toFixed(1)}°</span>`).join("")}</div>
+      <p class="small faint" style="margin-top:6px">${t("shot.plan_missing")}</p>`;
+  }
+  const rows = plan.map((p) => {
+    const exits = [...p.exits.map(exitText), `max ${p.max_duration_s} s`].join(" · ");
+    const status = p.status === "ran"
+      ? `<b class="num muted">${p.duration_s.toFixed(1)} s</b>`
+      : p.status === "skipped"
+        ? `<span class="pill warn">${t("shot.phase_skipped")}</span>${p.skip_reason ? ` <span class="small">${t("shot.phase_skipped_reason", { exit: exitText(p.skip_reason), measured: `${p.skip_reason.measured} ${EXIT_UNITS[p.skip_reason.type] ?? ""}`.trim() })}</span>` : ""}`
+        : `<span class="faint">${t("shot.phase_not_reached")}</span>`;
+    return `<tr class="${p.status === "ran" ? "" : "faint"}"><td>${p.index + 1}. ${phaseName(p.name)}</td><td><span class="pill">${t("shot.phase_type." + p.type)}</span></td><td>${status}</td><td class="small muted">${exits}</td></tr>`;
+  }).join("");
+  return `<table class="cmp" style="margin-top:10px"><tbody>${rows}</tbody></table>`;
+}
+
+/** What was typed into the machine's own web UI for this shot, if anything. */
+function deviceNoteLine(notes) {
+  const text = typeof notes?.notes === "string" ? notes.notes.trim() : "";
+  const rating = Number(notes?.rating) || 0;
+  if (!text && !rating) return "";
+  const esc = (v) => v.replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+  return `<p class="small faint" style="margin-top:12px">${t("shot.device_note")}: ${rating ? "★".repeat(rating) : ""}${rating && text ? " · " : ""}${esc(text)}</p>`;
+}
+
 export async function renderShot(view, [id]) {
   let data;
   try {
@@ -85,6 +140,7 @@ export async function renderShot(view, [id]) {
       </div>
       <div class="row">
         <a class="btn sm ghost" href="api/shots/${c.id}/receipt.png" target="_blank" rel="noopener">${t("shot.receipt")}</a>
+        ${data.profile_snapshot ? `<a class="btn sm ghost" href="api/shots/${c.id}/profile.json" download title="${t("shot.download_profile_hint")}">${t("shot.download_profile")}</a>` : ""}
         <button class="btn sm ghost" id="print">${t("shot.print")}</button>
         ${data.prev_id ? `<a class="btn sm ghost" href="#/shots/${data.prev_id}">← ${t("shot.prev")}</a>` : ""}
         ${data.next_id ? `<a class="btn sm ghost" href="#/shots/${data.next_id}">${t("shot.next")} →</a>` : ""}
@@ -94,11 +150,14 @@ export async function renderShot(view, [id]) {
     <section class="card">
       <div class="card-head">
         <h2>${t("shot.curve")}</h2>
-        <label class="row small muted">${t("shot.compare")} <select id="cmp" class="btn sm"><option value="">${t("shot.compare_none")}</option></select></label>
+        <div class="row small muted">
+          ${shot ? `<label class="row" title="${t("shot.targets_hint")}"><input type="checkbox" id="targets" ${targetsOn() ? "checked" : ""}> ${t("shot.targets")}</label>` : ""}
+          <label class="row">${t("shot.compare")} <select id="cmp" class="btn sm"><option value="">${t("shot.compare_none")}</option></select></label>
+        </div>
       </div>
       <div class="chart chart-shot" id="chart"></div>
       ${shot ? `<div class="phase-bar" style="margin-top:14px">${phaseBar}</div>
-      <div class="row small faint" style="margin-top:6px;gap:18px">${(shot.phases || []).map((p) => `<span>${t("shot.phase." + p.name) || p.name} <b class="num muted">${p.duration_seconds.toFixed(1)} s</b> · ${p.avg_pressure_bar.toFixed(1)} bar · ${p.avg_temperature_c.toFixed(1)}°</span>`).join("")}</div>` : ""}
+      ${phaseList(shot, data.phase_plan)}` : ""}
       <div id="cmp-table"></div>
     </section>
 
@@ -126,6 +185,7 @@ export async function renderShot(view, [id]) {
           <div class="row"><input id="caption" maxlength="160" value="${esc(data.caption?.text ?? "")}" placeholder="${t("shot.caption_placeholder")}" style="flex:1">${assistant.enabled ? `<button class="btn sm ghost" id="caption-suggest">${t("shot.caption_suggest")}</button>` : ""}</div>
           <p class="faint small">${t("shot.caption_hint")}</p></div>
         <div class="row" style="margin-top:10px"><button class="btn primary sm" id="save">${t("shot.save")}</button></div>
+        ${deviceNoteLine(data.device_notes)}
       </section>
     </div>
     ${assistant.enabled ? `<section class="card"><div class="card-head"><h2>${t("shot.ask")}</h2><a class="small muted" href="#/ask">${t("nav.ask")} →</a></div><div id="chat"></div></section>` : ""}`;
@@ -173,8 +233,16 @@ export async function renderShot(view, [id]) {
 
   let destroy = null;
   const container = view.querySelector("#chart");
-  const draw = (compare) => { if (destroy) destroy(); destroy = shot ? shotChart(container, shot, compare, { stableWeight: c.stable_weight_g }) : null; };
+  let compared = null;
+  let targets = targetsOn();
+  const draw = (compare) => {
+    compared = compare;
+    if (destroy) destroy();
+    destroy = shot ? shotChart(container, shot, compare, { stableWeight: c.stable_weight_g, targets }) : null;
+  };
   draw(null);
+  const toggle = view.querySelector("#targets");
+  if (toggle) toggle.onchange = () => { targets = toggle.checked; rememberTargets(targets); draw(compared); };
 
   // Comparison candidates: same bean if any, else the neighbours.
   const list = await api.shots({ limit: 40, ...(c.bean ? { bean: c.bean } : {}) });

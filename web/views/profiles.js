@@ -1,6 +1,6 @@
 import { t } from "../lib/i18n.js";
 import { api } from "../lib/api.js";
-import { toast } from "../lib/fmt.js";
+import { fmt, toast } from "../lib/fmt.js";
 
 const TARGET_TYPES = ["volumetric", "pumped", "pressure", "flow"];
 
@@ -39,9 +39,36 @@ function readPhases(root) {
   });
 }
 
+const esc = (v) => String(v ?? "").replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]);
+const day = (unix) => (unix ? fmt.date(unix) : "–");
+
+/**
+ * Every version of the profiles the archive has seen, grouped by profile,
+ * newest first. Read from the archive, not the machine, so it is there while
+ * the machine is off — it is the backup. `only` narrows it to one profile.
+ */
+async function versionsCard(only = null) {
+  let snapshots;
+  try { snapshots = (await api.profileSnapshots()).snapshots; } catch { return ""; }
+  if (only) snapshots = snapshots.filter((s) => s.profile_id === only);
+  const groups = new Map();
+  for (const s of snapshots) groups.set(s.profile_id, [...(groups.get(s.profile_id) ?? []), s]);
+  const body = groups.size
+    ? [...groups.values()].map((versions) => `
+        <details ${only ? "open" : ""} style="margin-top:8px"><summary><b>${esc(versions[0].label ?? versions[0].profile_id)}</b> <span class="faint small">· ${t("profiles.versions_count", { n: versions.length })}</span></summary>
+          <table class="cmp" style="margin-top:6px"><tbody>${versions.map((v) => `
+            <tr><td class="num">${day(v.first_seen_at)}</td><td class="small muted">${esc(v.label ?? "")}</td>
+              <td class="small muted num">${t("profiles.version_shots", { n: v.shots })}${v.last_shot_at ? ` · ${day(v.first_shot_at)} – ${day(v.last_shot_at)}` : ""}</td>
+              <td class="r"><a class="btn sm ghost" href="api/profile-snapshots/${v.id}/profile.json" download>${t("profiles.download")}</a></td></tr>`).join("")}
+          </tbody></table></details>`).join("")
+    : `<p class="small faint">${t("profiles.versions_empty")}</p>`;
+  return `<section class="card" style="margin-top:16px"><div class="card-head"><h2>${t("profiles.versions")}</h2></div>
+    <p class="small muted">${t("profiles.versions_hint")}</p>${body}</section>`;
+}
+
 export async function renderProfiles(view, [id]) {
   let list;
-  try { list = (await api.profiles()).profiles; } catch { view.innerHTML = `<h1>${t("profiles.title")}</h1><p class="empty">${t("profiles.unreachable")}</p>`; return; }
+  try { list = (await api.profiles()).profiles; } catch { view.innerHTML = `<h1>${t("profiles.title")}</h1><p class="empty">${t("profiles.unreachable")}</p>${await versionsCard(id ?? null)}`; return; }
 
   if (!id) {
     view.innerHTML = `<h1>${t("profiles.title")}</h1><div class="list">${list.map((p) => `
@@ -60,10 +87,12 @@ export async function renderProfiles(view, [id]) {
         renderProfiles(view, [id]);
       } catch (err) { toast(t("profiles.select_failed") + " " + err.message, "bad"); b.disabled = false; }
     }));
+    view.insertAdjacentHTML("beforeend", await versionsCard());
     return;
   }
 
   const { profile: p } = await api.profile(id);
+  const versions = await versionsCard(p.id);
   let phases = structuredClone(p.phases);
   const draw = () => {
     view.innerHTML = `
@@ -76,7 +105,7 @@ export async function renderProfiles(view, [id]) {
         </div></section>
         <div id="phases" class="grid">${phases.map(phaseCard).join("")}</div>
         <div class="row spread"><button type="button" class="btn ghost" id="add">${t("profiles.add_phase")}</button><button type="submit" class="btn primary">${t("profiles.save")}</button></div>
-      </form>`;
+      </form>${versions}`;
     const form = view.querySelector("#pf");
     view.querySelector("#add").onclick = () => { phases = readPhases(form); phases.push({ name: "Phase", phase: "brew", valve: 1, duration: 10, pump: { target: "pressure", pressure: 9, flow: 0 }, transition: { type: "linear", duration: 2 }, targets: [] }); draw(); };
     view.querySelectorAll("[data-remove]").forEach((b) => (b.onclick = () => { phases = readPhases(form); phases.splice(Number(b.dataset.remove), 1); draw(); }));

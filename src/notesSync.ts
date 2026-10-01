@@ -77,7 +77,7 @@ function lastSync(db: DatabaseSync, shotId: number): { payload: string; fingerpr
  * confirm. A failed push is not an error: the archive is the durable record and
  * the next pass will retry.
  */
-export async function syncNotes(db: DatabaseSync, context: ShotContextRow): Promise<boolean> {
+export async function syncNotes(db: DatabaseSync, context: ShotContextRow, deviceId: number): Promise<boolean> {
   if (!context.bean && context.dose_g == null && !context.grind_setting) {
     return false; // No setup covers this shot yet; nothing to say.
   }
@@ -86,7 +86,9 @@ export async function syncNotes(db: DatabaseSync, context: ShotContextRow): Prom
   const previous = lastSync(db, context.id);
   if (previous?.fingerprint === fingerprint) return false;
 
-  const existing = await getNotes(context.id);
+  // The device knows the shot by its own id, which differs from the archive's
+  // once its numbering has restarted.
+  const existing = await getNotes(deviceId);
   const notes = buildNotes(existing, context);
   const payload = JSON.stringify(notes);
 
@@ -97,7 +99,7 @@ export async function syncNotes(db: DatabaseSync, context: ShotContextRow): Prom
     return false;
   }
 
-  const ok = await saveNotes(context.id, notes);
+  const ok = await saveNotes(deviceId, notes);
   if (!ok) return false;
 
   db.prepare(

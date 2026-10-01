@@ -149,7 +149,8 @@ function chart(svg: Svg, curve: Array<{ time_seconds: number; pressure_bar: numb
   const left = 30, right = 8, plotH = 170, top = svg.y + 18;
   const plotW = RECEIPT_WIDTH - left - right;
   const tMax = Math.max(1, curve[curve.length - 1].time_seconds);
-  const vMax = Math.max(10, Math.ceil(Math.max(...curve.map((p) => Math.max(p.pressure_bar, p.flow_ml_s))) / 2) * 2);
+  // Pressure is NaN past the end of the extraction (not drawn, not scaled).
+  const vMax = Math.max(10, Math.ceil(Math.max(...curve.flatMap((p) => [p.pressure_bar, p.flow_ml_s].filter(Number.isFinite))) / 2) * 2);
   const px = (s: number) => left + (plotW * s) / tMax;
   const py = (v: number) => top + plotH - (plotH * v) / vMax;
   for (let g = 0; g <= vMax; g += 2) { svg.line(left, py(g), left + plotW, py(g), 1, g === 0 ? undefined : "1,3"); svg.text(left - 5, py(g) + 4, String(g), 12, { anchor: "end" }); }
@@ -161,7 +162,7 @@ function chart(svg: Svg, curve: Array<{ time_seconds: number; pressure_bar: numb
     svg.line(px(ph.start_time_seconds), top, px(ph.start_time_seconds), top + plotH, 1, "3,3");
     svg.text(px(ph.start_time_seconds) + 2, top + 11, ph.name.slice(0, 12), 10);
   }
-  const pl = (key: "pressure_bar" | "flow_ml_s") => curve.map((p) => `${px(p.time_seconds).toFixed(1)},${py(Math.max(0, p[key])).toFixed(1)}`).join(" ");
+  const pl = (key: "pressure_bar" | "flow_ml_s") => curve.filter((p) => Number.isFinite(p[key])).map((p) => `${px(p.time_seconds).toFixed(1)},${py(Math.max(0, p[key])).toFixed(1)}`).join(" ");
   svg.raw(`<polyline points="${pl("pressure_bar")}" fill="none" stroke="#000" stroke-width="2.2" stroke-linejoin="round"/>`);
   svg.raw(`<polyline points="${pl("flow_ml_s")}" fill="none" stroke="#000" stroke-width="2" stroke-dasharray="6,4" stroke-linejoin="round"/>`);
   const ly = top + plotH + 34;
@@ -272,8 +273,9 @@ export async function renderShotReceipt(db: DatabaseSync, shotId: number, lang: 
   // last sample, which is the pressure spike when the valve closes.
   const phasesAll = (shot.phases ?? []) as Array<{ name: string; start_time_seconds: number; duration_seconds: number }>;
   const decline = phasesAll.find((p) => p.name === "Decline");
+  const pressureUntil = shot.metadata.extraction_end_seconds ?? Infinity;
   const declineSamples = decline
-    ? curveAll.filter((p) => p.time_seconds >= decline.start_time_seconds && p.time_seconds <= decline.start_time_seconds + decline.duration_seconds).map((p) => p.pressure_bar)
+    ? curveAll.filter((p) => p.time_seconds >= decline.start_time_seconds && p.time_seconds <= Math.min(pressureUntil, decline.start_time_seconds + decline.duration_seconds)).map((p) => p.pressure_bar)
     : [];
   const lastPressure = declineSamples.length ? Math.min(...declineSamples) : null;
   const preinfusion = summary.extraction.preinfusion_time_seconds;
@@ -294,7 +296,12 @@ export async function renderShotReceipt(db: DatabaseSync, shotId: number, lang: 
   }
   svg.y += 8;
 
-  const curve = curveAll;
+  // The printed pressure stops where the extraction did: after it the valve
+  // is closed and the sensor reads the boiler climbing towards the OPV, which
+  // on paper would read as the shot's pressure and set the scale. Flow goes
+  // on to the end — the cup still fills.
+  const end = shot.metadata.extraction_end_seconds;
+  const curve = end == null ? curveAll : curveAll.map((p) => (p.time_seconds <= end ? p : { ...p, pressure_bar: Number.NaN }));
   const phases = (shot.phases ?? []) as Array<{ name: string; start_time_seconds: number }>;
   if (o.show_chart && curve.length >= 2) { svg.rule(); chart(svg, curve, phases, t); }
 

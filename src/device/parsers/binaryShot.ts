@@ -243,7 +243,24 @@ export function parseBinaryShot(buffer: Buffer, id: string): ShotData {
 
   // Parse samples
   const samples: ShotSample[] = [];
-  const actualSamples = Math.min(sampleCount, Math.floor((view.byteLength - actualHeaderSize) / sampleDataSize));
+  const fitting = Math.floor((view.byteLength - actualHeaderSize) / sampleDataSize);
+  // sampleCount is patched into the header only when recording ends, so a
+  // shot cut short (power lost mid-pull) reads 0 while its samples are on
+  // disk, followed by the unwritten rest of the flash block. The firmware
+  // gives such a shot up; here the samples are kept while the tick keeps
+  // rising — archived shot 2 had 137 of them (34 s of a 59 s pull).
+  let recovered = 0;
+  if (sampleCount === 0 && hasTick) {
+    let lastTick = -1;
+    for (; recovered < fitting; recovered++) {
+      const at = actualHeaderSize + recovered * sampleDataSize;
+      const tick = tickIsUint32 ? view.getUint32(at, true) : view.getUint16(at, true);
+      const blank = tickIsUint32 ? tick === 0xffffffff : tick === 0xffff;
+      if (blank || tick <= lastTick) break;
+      lastTick = tick;
+    }
+  }
+  const actualSamples = sampleCount === 0 ? recovered : Math.min(sampleCount, fitting);
 
   for (let i = 0; i < actualSamples; i++) {
     const sample: ShotSample = {};
@@ -290,8 +307,8 @@ export function parseBinaryShot(buffer: Buffer, id: string): ShotData {
     samples.push(sample);
   }
 
-  const incomplete = actualSamples < sampleCount;
-  if (incomplete) {
+  const incomplete = sampleCount === 0 || actualSamples < sampleCount;
+  if (sampleCount > 0 && actualSamples < sampleCount) {
     console.warn(`Shot ${id} is incomplete: ${actualSamples}/${sampleCount} samples`);
   }
 
@@ -305,7 +322,8 @@ export function parseBinaryShot(buffer: Buffer, id: string): ShotData {
     profileName,
     timestamp,
     rating,
-    duration,
+    // Unpatched header (see recovered above): the last sample is the length.
+    duration: duration || (typeof samples.at(-1)?.t === 'number' ? samples.at(-1)!.t as number : 0),
     weight: weightFloat,
     samples,
     phases,

@@ -148,13 +148,13 @@ export async function renderNow(view) {
       </section>`;
   };
   let latest = null;
-  view.addEventListener("change", (e) => {
+  const onChange = (e) => {
     if (e.target.id !== "coffee-at") return;
     try { localStorage.setItem(PLAN_KEY, e.target.value); } catch {}
     if (latest) draw(latest);
-  });
+  };
   // One handler on the view, since draw() replaces the buttons on every poll.
-  view.addEventListener("click", async (e) => {
+  const onClick = async (e) => {
     const button = e.target.closest("[data-mode]");
     if (!button || button.disabled || button.classList.contains("active")) return;
     view.querySelectorAll("[data-mode]").forEach((b) => (b.disabled = true));
@@ -165,10 +165,19 @@ export async function renderNow(view) {
       toast(t("machine.mode_failed") + " " + err.message, "bad");
     }
     draw(await api.now());
-  });
+  };
   const drawLatest = (now) => { latest = now; draw(now); };
   drawLatest(await api.now());
+  // The view element outlives this screen, so everything attached to it or to
+  // the document comes off again: a leftover click handler sent the mode
+  // change once per earlier visit.
   const onLive = (e) => drawLatest(e.detail);
+  view.addEventListener("change", onChange);
+  view.addEventListener("click", onClick);
   document.addEventListener("live", onLive);
-  return () => document.removeEventListener("live", onLive);
+  return () => {
+    view.removeEventListener("change", onChange);
+    view.removeEventListener("click", onClick);
+    document.removeEventListener("live", onLive);
+  };
 }

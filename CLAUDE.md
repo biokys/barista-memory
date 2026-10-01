@@ -107,6 +107,27 @@ re-ingest. Parsed values are a cache; the blob is the record.
 **Ingest works by set difference against the archive, never a high-water mark.**
 A gap left by the Pi being down is filled on the next pass, and a device whose
 ids restarted after a firmware update does not silently stop being archived.
+The difference is taken on (device id, start time), not the id alone: after a
+wipe the device's new shot 1 is a different shot from the archived 1, and
+matching by id skipped it and would have pushed the old shot's bean into its
+notes. Such a shot is archived under the next free id; `shots.device_id` keeps
+the device's, and notes sync addresses the device by that. The index lists a
+shot from the moment recording starts (incomplete, empty `.slog`), so the
+newest incomplete entry waits for a later pass, and a shot archived incomplete
+is fetched again once the device marks it complete. The same retry covers a
+completed shot whose `.slog` came back as 0 bytes: shots 6 and 22 were
+archived that way and their data was lost when the device was wiped.
+
+**The device's own notes are archived verbatim** in `shots.device_notes`.
+What is typed into the machine's web UI exists only there. They are read
+once per shot, again when the index rating changes, and hourly for shots
+from the last three days (a text edit leaves no trace in the index), at most
+ten reads per pass.
+
+**A `.slog` whose header says 0 samples may still hold samples.** The count
+is patched in only when recording ends, so a pull cut short leaves 0 and the
+samples followed by the unwritten block. The firmware discards such a shot;
+the parser keeps samples while the tick rises (archived shot 2: 34 s of 59).
 
 **Brewing context lives in `setups` as time intervals, not as fields on shots.**
 A change is recorded once and later shots inherit it; unspecified fields inherit
@@ -174,6 +195,29 @@ print by themselves (`host_dbus: true`, or `/run/dbus` mounted). The old
 path printed shot 415 (`systemctl disable --now c19-autoprint`); it is kept
 only as a reference driver. The printer sleeps: "not seen by Bluetooth"
 means switch it on, not a bug. Only one print at a time per process.
+
+**A shot's profile is archived only while it can still be the right one.**
+The `.slog` names the phases that ran (`phaseNumber` = index in the profile)
+but not their type or exit conditions, and a profile is edited in place: a
+Fill added to "Gentle and sweet (tuned)" renumbered every later phase.
+`profileSnapshots.ts` fetches the profile within 10 minutes of the shot's
+end and stores it (`profile_snapshots`, deduplicated by a hash that ignores
+`selected`/`favorite`; linked through `shot_profiles`, not a column on
+`shots`, so an older build reads the database unchanged) only if the phase
+names and the setpoints recorded in the samples agree with it. Never attach
+today's profile to an older shot. Phase names in the `.slog` are UTF-8 read
+as Latin-1 by the vendored parser; compare through `asLogged()`.
+
+**Pressure after the extraction is the boiler's, not the puck's.** The log
+runs on for 2–3 s after the controller stops (target pressure and flow both
+0); the valve closes, the pump runs down into it and the sensor climbs
+towards the OPV (shot 52: 9.8 bar after a 6.2 bar extraction). The
+extraction ends at the last sample with a setpoint or, after it, with puck
+flow > 0 — the setpoint clears a quarter second before the valve closes
+(shot 53); pump flow is no guide, it is what drives the climb. Pressure
+statistics stop at `metadata.extraction_end_seconds`, the chart draws that pressure dashed and
+the receipt not at all. Flow, temperature and weight run to the end — the
+cup still fills.
 
 **Notes sync compares a fingerprint before touching the machine.** `notes_sync`
 stores the archive-side inputs each push was built from; a pass where they are

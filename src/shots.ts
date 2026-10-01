@@ -1,8 +1,9 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { ShotContextRow } from "./db/db.js";
 import { parseSlog } from "./device/client.js";
-import { transformShotForAI } from "./device/shotTransformer.js";
+import { extractionEndIndex, transformShotForAI } from "./device/shotTransformer.js";
 import { cleanWeightSeries } from "./stableWeight.js";
+import { phasePlan, preinfusionPhasesOf, snapshotForShot, type PlannedPhase } from "./profileSnapshots.js";
 import { getCaption } from "./captions.js";
 
 /** The machine's thermal context for a shot, or null when the record started after it. */
@@ -29,13 +30,18 @@ export function loadArchivedShot(db: DatabaseSync, shotId: number, fullCurve: bo
     | undefined;
   if (!context) return null;
 
-  const row = db.prepare("SELECT raw_slog FROM shots WHERE id = ?").get(shotId) as
-    | { raw_slog: Uint8Array | null }
+  const row = db.prepare("SELECT raw_slog, device_notes FROM shots WHERE id = ?").get(shotId) as
+    | { raw_slog: Uint8Array | null; device_notes: string | null }
     | undefined;
+  let deviceNotes: Record<string, unknown> | null = null;
+  try { deviceNotes = row?.device_notes ? JSON.parse(row.device_notes) : null; } catch { deviceNotes = null; }
+  const snapshot = snapshotForShot(db, shotId);
   let shot: any = null;
+  let phasePlanned: PlannedPhase[] | null = null;
   if (row?.raw_slog) {
     const parsed = parseSlog(Buffer.from(row.raw_slog), shotId);
-    shot = transformShotForAI(parsed, fullCurve);
+    shot = transformShotForAI(parsed, fullCurve, snapshot ? { preinfusionPhases: preinfusionPhasesOf(snapshot.profile) } : {});
+    if (snapshot) phasePlanned = phasePlan(snapshot.profile, parsed);
     // One cleaned weight per curve point, alongside the raw reading: the chart
     // draws the cleaned one, the raw stays available for anyone who asks.
     if (fullCurve && Array.isArray(shot.full_curve) && shot.full_curve.length === parsed.samples.length) {
@@ -44,7 +50,12 @@ export function loadArchivedShot(db: DatabaseSync, shotId: number, fullCurve: bo
     }
   }
 
-  return { context, machine: machineContextOf(context), shot, caption: getCaption(db, shotId) };
+  // The profile version itself is served on its own (a download); here only
+  // what identifies it, and the plan laid over the log.
+  const profileSnapshot = snapshot
+    ? { id: snapshot.id, profile_id: snapshot.profile_id, label: snapshot.label, content_hash: snapshot.content_hash, first_seen_at: snapshot.first_seen_at }
+    : null;
+  return { context, machine: machineContextOf(context), shot, device_notes: deviceNotes, profile_snapshot: profileSnapshot, phase_plan: phasePlanned, caption: getCaption(db, shotId) };
 }
 
 /**
@@ -56,7 +67,12 @@ export function pressureSparkline(db: DatabaseSync, shotId: number, points = 48)
     | { raw_slog: Uint8Array | null }
     | undefined;
   if (!row?.raw_slog) return [];
-  const samples = parseSlog(Buffer.from(row.raw_slog), shotId).samples;
+  const all = parseSlog(Buffer.from(row.raw_slog), shotId).samples;
+  // Up to the end of the extraction: the seconds after it are the boiler
+  // climbing behind the closed valve, which as a max-per-bucket sparkline
+  // ended every row in a spike.
+  const end = extractionEndIndex(all);
+  const samples = end >= 0 ? all.slice(0, end + 1) : all;
   const pressures = samples.map((s: any) => (typeof s.cp === "number" ? s.cp : 0));
   if (pressures.length <= points) return pressures;
   const out: number[] = [];

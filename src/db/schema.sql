@@ -15,7 +15,12 @@ PRAGMA foreign_keys = ON;
 -- not read today (puck resistance, target flow, system info) can still be
 -- recovered from the archive later.
 CREATE TABLE IF NOT EXISTS shots (
-  id             INTEGER PRIMARY KEY,          -- the device's own shot id
+  id             INTEGER PRIMARY KEY,          -- the archive's id: the device's, unless taken
+  -- The id the device knows the shot by. Equal to id until the device's
+  -- numbering restarts (a firmware update that wipes history): its new shot 1
+  -- is then a different shot from the archived 1, told apart by started_at,
+  -- and is archived under the next free id instead.
+  device_id      INTEGER,
   started_at     INTEGER NOT NULL,             -- unix seconds, from the device
   profile_id     TEXT,
   profile_name   TEXT,
@@ -40,6 +45,11 @@ CREATE TABLE IF NOT EXISTS shots (
   -- minutes ago from one woken half an hour ago.
   machine_settledness   INTEGER,
   device_rating  INTEGER,
+  -- The device's own notes for the shot, verbatim JSON as the machine holds
+  -- them (rating, taste note, doseOut typed into its web UI). They exist only
+  -- on the machine and a firmware update wipes them. Refreshed by ingest.
+  device_notes    TEXT,
+  device_notes_at INTEGER,
   incomplete     INTEGER NOT NULL DEFAULT 0,
   raw_slog       BLOB,
   ingested_at    INTEGER NOT NULL,
@@ -54,6 +64,7 @@ CREATE TABLE IF NOT EXISTS shots (
 );
 
 CREATE INDEX IF NOT EXISTS shots_started_at ON shots (started_at);
+CREATE INDEX IF NOT EXISTS shots_device_id ON shots (device_id);
 
 -- A coffee as an identity, apart from the periods it was ground in: the
 -- same bag bought again next month is the same coffee, and "what grind did
@@ -269,6 +280,39 @@ CREATE TABLE IF NOT EXISTS machine_state (
 );
 
 CREATE INDEX IF NOT EXISTS machine_state_reachable ON machine_state (reachable, sampled_at);
+
+-- Every version of every profile a shot was pulled with, stored once.
+--
+-- The machine keeps only the current profile, and the .slog names its phases
+-- but not their type or exit conditions. A profile is edited in place and
+-- a phase added at the front renumbers every later one, so reading an old
+-- shot against today's profile gives the wrong phases; only a copy taken
+-- when the shot was pulled says what was planned. Also the archive's backup
+-- of the profiles themselves, which the machine has no history of.
+--
+-- content_hash is over the profile with selected and favorite removed: which
+-- profile is selected is not a new version of it.
+CREATE TABLE IF NOT EXISTS profile_snapshots (
+  id            INTEGER PRIMARY KEY,
+  profile_id    TEXT NOT NULL,
+  label         TEXT,
+  content_hash  TEXT NOT NULL UNIQUE,
+  profile_json  TEXT NOT NULL,          -- verbatim as the machine returned it
+  first_seen_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS profile_snapshots_profile ON profile_snapshots (profile_id, first_seen_at);
+
+-- Which profile version a shot was pulled with. A table of its own rather than
+-- a column on shots so that the shots table is untouched and an older build
+-- reads this database unchanged. No row: not captured (archived later than
+-- the capture window, or the profile no longer matched the log) — never a
+-- guess from the current profile.
+CREATE TABLE IF NOT EXISTS shot_profiles (
+  shot_id     INTEGER PRIMARY KEY REFERENCES shots (id) ON DELETE CASCADE,
+  snapshot_id INTEGER NOT NULL REFERENCES profile_snapshots (id),
+  captured_at INTEGER NOT NULL
+);
 
 -- A line of the user's (or the assistant's) own on the printed receipt: "for
 -- Klára", "first shot of the new bag". Separate from tastings.note, which is

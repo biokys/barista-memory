@@ -43,7 +43,24 @@ function renderNav(active) {
   nav.innerHTML = navItems.map((k) => `<a href="${NAV_HREF[k]}" class="${k === active ? "active" : ""}">${t("nav." + k)}</a>`).join("");
 }
 
-async function navigate() {
+// Navigations run one at a time. A view hands back its cleanup only once its
+// data has arrived, so two overlapping renders lost the first one's cleanup:
+// leaving "now" while its first fetch was still out left its "live" listener
+// attached, and every poll redrew the machine card over whatever was open.
+let running = null;
+let again = false;
+
+function navigate() {
+  if (running) { again = true; return running; }
+  running = (async () => {
+    try {
+      do { again = false; await render(); } while (again);
+    } finally { running = null; }
+  })();
+  return running;
+}
+
+async function render() {
   const hash = location.hash || "#/";
   const view = document.getElementById("view");
   // Freeze the height while the next view loads: destroying the old charts
@@ -127,10 +144,13 @@ function resolveTheme() {
 
 function applyTheme(rerender) {
   const theme = resolveTheme();
+  const changed = document.documentElement.dataset.theme !== theme;
   document.documentElement.dataset.theme = theme;
   document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#f6f2ec" : "#0f0e0c");
-  // Charts read their colours once, when drawn, so the current view is redrawn.
-  if (rerender) navigate();
+  // Charts read their colours once, when drawn, so the current view is redrawn —
+  // but only on a real change: HA touches its root's style for unrelated
+  // reasons, and each redraw scrolls the page to the top.
+  if (rerender && changed) navigate();
 }
 
 document.getElementById("theme").addEventListener("click", () => {

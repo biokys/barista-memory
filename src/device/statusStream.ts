@@ -23,6 +23,16 @@ export interface StatusEvent {
 
 const RECONNECT_MIN_MS = 5_000;
 const RECONNECT_MAX_MS = 60_000;
+/**
+ * A connected machine sends telemetry every 500 ms. Silence this long means
+ * the socket is dead: a machine switched off sends no FIN, and nothing is ever
+ * written on this socket, so TCP alone never notices. On 2026-09-27 the
+ * machine went off at 17:00 and the socket sat ESTABLISHED and silent for
+ * 16 hours after it came back, blind to any backflush.
+ */
+const SILENCE_MS = 20_000;
+/** A powered-off machine answers nothing, not even the TCP handshake. */
+const HANDSHAKE_MS = 10_000;
 
 /**
  * A persistent subscription to the machine's status stream.
@@ -38,12 +48,20 @@ export function startStatusStream(onStatus: (event: StatusEvent) => void, onGap?
   let ws: WebSocket | null = null;
   let backoff = RECONNECT_MIN_MS;
   let timer: NodeJS.Timeout | null = null;
+  let silence: NodeJS.Timeout | null = null;
 
   const connect = () => {
     if (stopped) return;
-    ws = new WebSocket(wsUrl);
-    ws.on("open", () => { backoff = RECONNECT_MIN_MS; });
-    ws.on("message", (data) => {
+    const socket = new WebSocket(wsUrl, { handshakeTimeout: HANDSHAKE_MS });
+    ws = socket;
+    // terminate() emits close, and close schedules the reconnect.
+    const heard = () => {
+      if (silence) clearTimeout(silence);
+      silence = setTimeout(() => socket.terminate(), SILENCE_MS);
+    };
+    socket.on("open", () => { backoff = RECONNECT_MIN_MS; heard(); });
+    socket.on("message", (data) => {
+      heard();
       try {
         const msg = JSON.parse(data.toString());
         if (msg?.tp === "evt:status") onStatus(msg as StatusEvent);
@@ -52,19 +70,21 @@ export function startStatusStream(onStatus: (event: StatusEvent) => void, onGap?
       }
     });
     const retry = () => {
+      if (silence) clearTimeout(silence);
       if (stopped) return;
       onGap?.();
       timer = setTimeout(connect, backoff);
       backoff = Math.min(backoff * 2, RECONNECT_MAX_MS);
     };
-    ws.on("error", () => { /* close follows */ });
-    ws.on("close", retry);
+    socket.on("error", () => { /* close follows */ });
+    socket.on("close", retry);
   };
 
   connect();
   return () => {
     stopped = true;
     if (timer) clearTimeout(timer);
+    if (silence) clearTimeout(silence);
     ws?.close();
   };
 }
