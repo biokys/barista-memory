@@ -33,7 +33,7 @@ import { getSetting } from "../settings.js";
 import { setSetting } from "../settings.js";
 import { loadArchivedShot, pressureSparkline } from "../shots.js";
 import { saveProfileMerged, selectProfileOnMachine } from "../profiles.js";
-import { listSnapshots, snapshotDownload } from "../profileSnapshots.js";
+import { listSnapshots, snapshotDownload, snapshotForShot } from "../profileSnapshots.js";
 import { statsSummary } from "../stats.js";
 import { ingestOnce } from "../ingest.js";
 import { recordEvent, updateEvent, deleteEvent, listEvents, eraOf, EVENT_KINDS } from "../events.js";
@@ -224,8 +224,8 @@ function sendProfile(res: ServerResponse, download: { filename: string; json: st
 }
 
 route("GET", "/api/shots/:id/profile.json", async (_req, res, p) => {
-  const row = db.prepare("SELECT snapshot_id FROM shot_profiles WHERE shot_id = ?").get(Number(p.id)) as { snapshot_id: number } | undefined;
-  sendProfile(res, row ? snapshotDownload(db, row.snapshot_id) : null);
+  const snapshot = snapshotForShot(db, Number(p.id));
+  sendProfile(res, snapshot ? snapshotDownload(db, snapshot.id) : null);
 });
 
 route("GET", "/api/profile-snapshots", async (_req, res) => {

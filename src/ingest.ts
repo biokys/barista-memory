@@ -305,7 +305,9 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
       maxId = Math.max(maxId, archiveId);
       onDevice.set(archiveId, entry);
       result.archived++;
-      fresh.push(archiveId);
+      // A shot archived without its curve is reported as new by the heal that
+      // brings the curve, not here, or the daemon would print it twice.
+      if (slog.length > 0 && !entry.incomplete) fresh.push(archiveId);
       sawNew = true;
     } catch (error) {
       result.failures.push({

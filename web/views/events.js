@@ -2,11 +2,11 @@ import { t } from "../lib/i18n.js";
 import { api } from "../lib/api.js";
 import { fmt, toast } from "../lib/fmt.js";
 import { statusRows } from "../lib/maintenance.js";
+import { esc } from "../lib/assistant.js";
 
 const KINDS = ["equipment", "technique", "maintenance", "beans", "other"];
 const toLocalInput = (unix) => { const d = new Date(unix * 1000); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
 const fromLocalInput = (s) => Math.floor(new Date(s).getTime() / 1000);
-const attr = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 
 /**
  * Turning points: a new tool, a change of technique, maintenance. Separate
@@ -49,7 +49,7 @@ export async function renderEvents(view) {
           ${maint.log.length ? `<div class="timeline">${maint.log.map((e) => `
             <div class="tl-item">
               <div class="when">${fmt.dateTime(e.at)}</div>
-              <div class="row"><span class="pill ${e.auto ? "" : "accent"}">${t("maint.type." + e.type_key)}</span>${e.auto ? `<span class="faint small">${t("maint.detected")}${e.shot_id ? " · #" + e.shot_id : ""}</span>` : ""}${e.note ? `<span class="faint small">${e.note}</span>` : ""}<button class="btn sm ghost" data-del-maint="${e.id}">${t("events.delete")}</button></div>
+              <div class="row"><span class="pill ${e.auto ? "" : "accent"}">${t("maint.type." + e.type_key)}</span>${e.auto ? `<span class="faint small">${t("maint.detected")}${e.shot_id ? " · #" + e.shot_id : ""}</span>` : ""}${e.note ? `<span class="faint small">${esc(e.note)}</span>` : ""}<button class="btn sm ghost" data-del-maint="${e.id}">${t("events.delete")}</button></div>
             </div>`).join("")}</div>` : `<p class="empty">${t("maint.log_empty")}</p>`}
           <details class="maint-settings">
             <summary>${t("maint.intervals")}</summary>
@@ -73,15 +73,15 @@ export async function renderEvents(view) {
               <div class="when">${fmt.dateTime(e.at)}</div>
               ${editing === e.id ? `
               <form class="form edit-event" style="margin-top:8px">
-                <div class="field"><label>${t("events.what")}</label><input name="title" required value="${attr(e.title)}"></div>
+                <div class="field"><label>${t("events.what")}</label><input name="title" required value="${esc(e.title)}"></div>
                 <div class="grid cols-2">
                   <div class="field"><label>${t("events.kind")}</label><select name="kind">${KINDS.map((k) => `<option value="${k}" ${k === e.kind ? "selected" : ""}>${t("events.kind." + k)}</option>`).join("")}</select></div>
                   <div class="field"><label>${t("events.when")}</label><input type="datetime-local" name="at" value="${toLocalInput(e.at)}"></div>
                 </div>
-                <div class="field"><label>${t("events.note")}</label><input name="note" value="${attr(e.note)}"></div>
+                <div class="field"><label>${t("events.note")}</label><input name="note" value="${esc(e.note)}"></div>
                 <div class="row"><button class="btn primary sm" type="submit">${t("events.save")}</button><button class="btn sm ghost" type="button" data-cancel>${t("events.cancel")}</button></div>
               </form>` : `
-              <div class="row"><span class="pill accent">${t("events.kind." + e.kind)}</span><b>${e.title}</b>${e.note ? `<span class="faint small">${e.note}</span>` : ""}<button class="btn sm ghost" data-edit-event="${e.id}">${t("events.edit")}</button><button class="btn sm ghost" data-del-event="${e.id}" data-title="${attr(e.title)}">${t("events.delete")}</button></div>`}
+              <div class="row"><span class="pill accent">${t("events.kind." + e.kind)}</span><b>${esc(e.title)}</b>${e.note ? `<span class="faint small">${esc(e.note)}</span>` : ""}<button class="btn sm ghost" data-edit-event="${e.id}">${t("events.edit")}</button><button class="btn sm ghost" data-del-event="${e.id}" data-title="${esc(e.title)}">${t("events.delete")}</button></div>`}
             </div>`).join("")}</div>` : `<p class="empty">${t("events.none")}</p>`}
         </section>
         </div>

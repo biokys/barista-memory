@@ -36,6 +36,8 @@ const CHANNEL_FLOW_RISE = 0.4;
 const CHOKED_FIRST_DRIP_S = 20;
 /** A shot whose pump never got past this is not espresso. */
 const LOW_PRESSURE_BAR = 5;
+/** Logs without setpoints end this much before the last sample: the valve-closed tail. */
+const TAIL_FALLBACK_S = 2;
 /** Temperature swing over the main extraction worth a remark. */
 const TEMP_SWING_C = 3;
 /** Baseline: at least this many earlier shots pulled the same way. */
@@ -62,7 +64,7 @@ function curveOf(db: DatabaseSync, slog: Uint8Array, shotId: number) {
     duration_s: shot.metadata.duration_seconds,
     // Where the controller stopped; the pressure after it is valve and boiler,
     // not the puck. Logs without setpoints fall back to two seconds short of the end.
-    end_s: shot.metadata.extraction_end_seconds ?? Math.max(0, shot.metadata.duration_seconds - 2),
+    end_s: shot.metadata.extraction_end_seconds ?? Math.max(0, shot.metadata.duration_seconds - TAIL_FALLBACK_S),
     first_drip_s: shot.summary.flow.time_to_first_drip_seconds,
     max_bar: shot.summary.pressure.max_bar,
   };
@@ -107,7 +109,7 @@ function ownFlags(c: ReturnType<typeof curveOf>): Flag[] {
   // a lowered pressure cannot fake a swing the way it fakes a channel, and on
   // a "Hold > Decline" profile the decline is most of the shot.
   const temps = c.points
-    .filter((p) => p.time_seconds >= from && p.time_seconds <= Math.max(from, c.duration_s - 2))
+    .filter((p) => p.time_seconds >= from && p.time_seconds <= Math.max(from, c.duration_s - TAIL_FALLBACK_S))
     .map((p) => p.temperature_c)
     .filter((t) => t > 0);
   if (temps.length > 4 && Math.max(...temps) - Math.min(...temps) > TEMP_SWING_C) flags.push("temperature_unstable");

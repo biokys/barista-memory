@@ -272,7 +272,7 @@ function processPhases(shot: ShotData, pressureEnd: number): PhaseData[] {
 
     // Calculate phase statistics; pressure without the post-extraction tail
     const temperatures = phaseSamples.map(s => s.ct || 0).filter(t => t > 0);
-    const pressures = samples.slice(startIndex, Math.max(startIndex + 1, Math.min(endIndex, pressureEnd))).map(s => s.cp || 0);
+    const pressures = samples.slice(startIndex, Math.min(endIndex, pressureEnd)).map(s => s.cp || 0);
     const totalFlow = calculateTotalVolume(phaseSamples, shot.sampleInterval);
     
     // Select representative samples (beginning, middle, end)

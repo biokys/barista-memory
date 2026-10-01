@@ -74,10 +74,12 @@ function median(values: number[]): number | null {
  * flow, and — where the phase jumps straight to it — the value itself.
  * A ramp's setpoint moves through the phase, so only its mode is compared.
  */
+/** The last samples are written as the pump stops, setpoints already cleared. */
+const CLEARED_TAIL_SAMPLES = 2;
+
 export function setpointsAgree(profile: Profile, shot: ShotData): boolean {
   const TOLERANCE = 0.15;
-  // The last samples are written as the pump stops, setpoints already cleared.
-  const usable = Math.max(0, shot.samples.length - 2);
+  const usable = Math.max(0, shot.samples.length - CLEARED_TAIL_SAMPLES);
   return shot.phases.every((t, k) => {
     const phase = profile.phases?.[t.phaseNumber];
     if (!phase) return false;
@@ -120,6 +122,9 @@ function storeSnapshot(db: DatabaseSync, profile: Profile, now: number): number 
  * that got one. `fetchProfile` is injectable so the rule can be tested
  * without a machine.
  */
+/** Shots whose profile no longer matched their log; see the capture loop. */
+const rejected = new Set<number>();
+
 export async function captureProfileSnapshots(
   db: DatabaseSync,
   fetchProfile: (id: string) => Promise<Profile | null> = getProfile,
@@ -140,6 +145,7 @@ export async function captureProfileSnapshots(
   const link = db.prepare("INSERT OR IGNORE INTO shot_profiles (shot_id, snapshot_id, captured_at) VALUES (?, ?, ?)");
   const captured: number[] = [];
   for (const row of rows) {
+    if (rejected.has(row.id)) continue;
     let parsed: ShotData;
     try { parsed = parseSlog(Buffer.from(row.raw_slog), row.id); } catch { continue; }
     if (!profiles.has(row.profile_id)) {
@@ -149,7 +155,11 @@ export async function captureProfileSnapshots(
     }
     const profile = profiles.get(row.profile_id);
     // Unreachable: the next pass tries again while the window is open.
-    if (!profile || !matchesLog(profile, parsed.phases) || !setpointsAgree(profile, parsed)) continue;
+    if (!profile) continue;
+    // Disagreeing: the profile was edited after the shot, and an edit is not
+    // undone, so the shot is given up for this process rather than fetched
+    // again on every pass until the window closes.
+    if (!matchesLog(profile, parsed.phases) || !setpointsAgree(profile, parsed)) { rejected.add(row.id); continue; }
     link.run(row.id, storeSnapshot(db, profile, now), now);
     captured.push(row.id);
   }
@@ -199,7 +209,7 @@ export interface PlannedPhase {
   start_s: number | null;
   duration_s: number | null;
   /** For a skipped phase, the exit that already held when it was due, if the log shows one. */
-  skip_reason: { type: string; value: number; measured: number } | null;
+  skip_reason: { type: string; operator: string | undefined; value: number; measured: number } | null;
 }
 
 /** What a sample reads for an exit condition's quantity, where the log has it. */
@@ -241,7 +251,7 @@ export function phasePlan(profile: Profile, shot: ShotData): PlannedPhase[] {
       const measured = sample ? measuredFor(exit.type, sample) : null;
       if (measured == null) continue;
       const met = exit.operator === "lte" ? measured <= exit.value : measured >= exit.value;
-      if (met) { reason = { type: exit.type, value: exit.value, measured: Math.round(measured * 10) / 10 }; break; }
+      if (met) { reason = { type: exit.type, operator: exit.operator, value: exit.value, measured: Math.round(measured * 10) / 10 }; break; }
     }
     return { ...base, status: "skipped" as const, start_s: null, duration_s: null, skip_reason: reason };
   });
