@@ -3,6 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { config } from "../config.js";
 import { currentSetup } from "../db/db.js";
 import { printerSettings } from "../printer/index.js";
+import { grinderPreferences, describeGrinder } from "../grinder.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
 import { ASSISTANT_TOOLS, runAssistantTool } from "./tools.js";
 import { appendMessage, getConversation, messagesFor, recordUsage, usageOf, addUsage, estimateCostUsd, NO_USAGE, type TokenUsage } from "./conversations.js";
@@ -60,6 +61,7 @@ function contextLine(db: DatabaseSync, ctx: TurnContext): string {
     ctx.shotId != null ? `The user is looking at shot #${ctx.shotId}.` : "No shot is open; the user asks from the assistant page.",
     `UI language: ${ctx.lang}. Receipt language: ${printerSettings(db).lang}.`,
     `Setup in force: ${inForce}.`,
+    `Grinder: ${describeGrinder(grinderPreferences(db))}; a grind change is a whole number of steps, never finer than one step.`,
   ].join(" ");
 }
 

@@ -24,8 +24,9 @@ import { getCoffee } from "../coffees.js";
 import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "../ingest.js";
 import { powerSessions, currentConditions, MODE_NAMES } from "../machineState.js";
 import { setCaption, CAPTION_MAX_CHARS } from "../captions.js";
+import { grinderPreferences } from "../grinder.js";
 
-const MCP_VERSION = "0.5.0";
+const MCP_VERSION = "0.5.3";
 
 /** One tool call's outcome, in the MCP's own shape; the assistant reads the same object. */
 export interface ToolResult {
@@ -49,7 +50,8 @@ export const TOOLS: Tool[] = [
   {
     name: "get_current_setup",
     description:
-      "Get the brewing context currently in force: beans, roaster, roast date, grind setting, dose and basket. " +
+      "Get the brewing context currently in force: beans, roaster, roast date, grind setting, dose and basket, " +
+      "plus the grinder's dial (range and smallest step — a grind change is a whole number of steps). " +
       "This is what new shots inherit, so it is the answer to 'what am I pulling right now'.",
     inputSchema: { type: "object", properties: {} },
   },
@@ -480,7 +482,7 @@ export async function callTool(db: DatabaseSync, name: string, args: ToolArgs): 
     switch (name) {
       case "get_current_setup": {
         const setup = currentSetup(db);
-        return ok({ setup, stock: currentStock(db), source: config.deviceHost });
+        return ok({ setup, grinder: grinderPreferences(db), stock: currentStock(db), source: config.deviceHost });
       }
 
       case "set_current_setup": {

@@ -22,6 +22,7 @@ import { assistantEnabled, runTurn, type AssistantEvent } from "../assistant/cha
 import { suggestCaption } from "../assistant/caption.js";
 import { listConversations, getConversation, createConversation, deleteConversation, messagesFor, displayMessages, usageSummary } from "../assistant/conversations.js";
 import { setCaption, CAPTION_MAX_CHARS } from "../captions.js";
+import { grindScale, grinderPreferences } from "../grinder.js";
 import { recordSetup, updateSetup } from "../setups.js";
 import { listCoffees, coffeeSummary, createCoffee, updateCoffee } from "../coffees.js";
 import { agingPoints, bags, currentStock, stockWarnG } from "../coffeeStats.js";
@@ -427,27 +428,8 @@ route("GET", "/api/coffees/:id/suggestion", async (_req, res, p) => {
 // Small preferences the UI keeps in the settings table: the grinder's name
 // (a grind number means nothing without it), its scale, and the low-stock
 // threshold.
-//
-// The scale is what every grind control is drawn from. It was hard-coded as
-// 0–90 in 0.1 steps — the DF64's dial — which is wrong for every other
-// grinder and too fine even for that one: nobody sets a DF64 to 12.3, the
-// marks are halves (2026-09-24).
-const GRIND_SCALE_DEFAULT = { min: 0, max: 90, step: 0.5 };
-
-function grindScale() {
-  const num = (key: string, fallback: number) => {
-    const n = Number(getSetting(db, key, String(fallback)));
-    return Number.isFinite(n) ? n : fallback;
-  };
-  return {
-    grind_min: num("grind_min", GRIND_SCALE_DEFAULT.min),
-    grind_max: num("grind_max", GRIND_SCALE_DEFAULT.max),
-    grind_step: num("grind_step", GRIND_SCALE_DEFAULT.step),
-  };
-}
-
 function preferences() {
-  return { grinder: getSetting(db, "grinder", ""), ...grindScale(), stock_warn_g: stockWarnG(db), stock: currentStock(db) };
+  return { ...grinderPreferences(db), stock_warn_g: stockWarnG(db), stock: currentStock(db) };
 }
 
 route("GET", "/api/preferences", async (_req, res) => {
@@ -463,7 +445,7 @@ route("PATCH", "/api/preferences", async (req, res) => {
   }
   if (body.grinder !== undefined) setSetting(db, "grinder", String(body.grinder).trim() || null);
   if (body.grind_min !== undefined || body.grind_max !== undefined || body.grind_step !== undefined) {
-    const current = grindScale();
+    const current = grindScale(db);
     const min = Number(body.grind_min ?? current.grind_min);
     const max = Number(body.grind_max ?? current.grind_max);
     const step = Number(body.grind_step ?? current.grind_step);
