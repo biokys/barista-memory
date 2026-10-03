@@ -357,3 +357,139 @@ export function scatterChart(container, xs, ys, groups, labels, { xLabel, yLabel
   container.appendChild(row);
   return responsive(plot, container);
 }
+
+/** A hex colour with alpha, for band fills. */
+const alpha = (hex, a) => (/^#[0-9a-f]{6}$/i.test(hex) ? hex + Math.round(a * 255).toString(16).padStart(2, "0") : hex);
+
+/** A series drawn only to carry a band's edge: no stroke of its own. */
+const edge = () => ({ stroke: "transparent", width: 1, points: { show: false } });
+
+/**
+ * A median curve with its interquartile band and one shot drawn over it.
+ * `band` is {median, lo, hi} on the grid `xs`; `latest` the overlaid curve.
+ */
+export function bandChart(container, xs, band, latest, { color, unit, medianLabel, latestLabel, digits = 1 }) {
+  const c = colors();
+  const fmt = (v) => `${v.toFixed(digits)} ${unit}`;
+  const plot = new uPlot({
+    width: container.clientWidth, height: 260,
+    cursor: { drag: { x: false, y: false } },
+    legend: { show: false },
+    scales: { x: { time: false }, y: { range: (u, min, max) => [0, max == null ? 1 : max * 1.08] } },
+    axes: [axis({ scale: "x", label: "s" }), axis({ scale: "y", label: unit })],
+    bands: [{ series: [1, 2], fill: alpha(color, 0.2) }],
+    series: [
+      {},
+      { ...edge(), label: "hi" },
+      { ...edge(), label: "lo" },
+      { label: medianLabel, stroke: color, width: 2, points: { show: false } },
+      { label: latestLabel, stroke: c.text, width: 1.5, dash: [4, 3], points: { show: false } },
+    ],
+  }, [xs, band.hi, band.lo, band.median, latest], container);
+  const last = (values) => { for (let i = values.length - 1; i >= 0; i--) if (values[i] != null) return values[i]; return null; };
+  readout(plot, container, [
+    { name: medianLabel, color, series: 3, fmt, label: "", idle: last(band.median) == null ? "–" : fmt(last(band.median)), x: (v) => `${v.toFixed(1)} s` },
+    { name: latestLabel, color: c.text, series: 4, fmt, label: "", idle: last(latest) == null ? "–" : fmt(last(latest)) },
+  ]);
+  return responsive(plot, container);
+}
+
+/**
+ * Points by group with, per group, a least-squares line and its 95 % band
+ * for the mean. `groups`: [{label, color, xs, ys, fit}] where `fit` carries
+ * slope, intercept, resid_sd, n, x_mean, sxx, t_crit, x_min, x_max, or null.
+ * uPlot wants one ascending x, so every point and every fit sample becomes
+ * an entry of a merged x and the fits are evaluated at each entry inside
+ * their range: no gaps inside a band, nothing to span.
+ */
+export function fitChart(container, groups, { xLabel, yLabel, unit, digits = 1 }) {
+  const entries = [];
+  groups.forEach((g, gi) => g.xs.forEach((x, i) => entries.push({ x, gi, y: g.ys[i] })));
+  for (const g of groups) {
+    if (!g.fit) continue;
+    for (let k = 0; k <= 12; k++) entries.push({ x: g.fit.x_min + ((g.fit.x_max - g.fit.x_min) * k) / 12, gi: -1, y: null });
+  }
+  entries.sort((a, b) => a.x - b.x);
+  const xs = entries.map((e) => e.x);
+  const data = [xs];
+  const series = [{}];
+  const bands = [];
+  const meta = [];
+  const evaluate = (fit, x) => {
+    const y = fit.intercept + fit.slope * x;
+    const se = fit.resid_sd * Math.sqrt(1 / fit.n + (x - fit.x_mean) ** 2 / fit.sxx);
+    return { y, lo: y - fit.t_crit * se, hi: y + fit.t_crit * se };
+  };
+  groups.forEach((g, gi) => {
+    data.push(entries.map((e) => (e.gi === gi ? e.y : null)));
+    series.push({ label: g.label, stroke: g.color, paths: uPlot.paths.points({ size: 7 }), points: { show: true, size: 7 } });
+    meta.push({ name: g.label, color: g.color, series: data.length - 1, fmt: (v) => `${v.toFixed(digits)} ${unit}`, label: "", idle: g.fit ? `${g.fit.slope >= 0 ? "+" : ""}${g.fit.slope.toFixed(2)} ${unit}/${xLabel}` : `n ${g.xs.length}` });
+    if (!g.fit) return;
+    const inRange = (x) => x >= g.fit.x_min - 1e-9 && x <= g.fit.x_max + 1e-9;
+    const hi = xs.map((x) => (inRange(x) ? evaluate(g.fit, x).hi : null));
+    const lo = xs.map((x) => (inRange(x) ? evaluate(g.fit, x).lo : null));
+    const line = xs.map((x) => (inRange(x) ? evaluate(g.fit, x).y : null));
+    data.push(hi, lo, line);
+    const at = data.length - 1;
+    series.push({ ...edge(), label: "hi" }, { ...edge(), label: "lo" }, { label: g.label + " fit", stroke: g.color, width: 1.5, points: { show: false } });
+    bands.push({ series: [at - 2, at - 1], fill: alpha(g.color, 0.14) });
+  });
+  if (meta.length) meta[0].x = (v) => `${xLabel} ${v.toFixed(1)}`;
+  const plot = new uPlot({
+    width: container.clientWidth, height: 260,
+    cursor: { drag: { x: false, y: false } },
+    legend: { show: false },
+    scales: { x: { time: false }, y: {} },
+    axes: [axis({ scale: "x", label: xLabel }), axis({ scale: "y", label: yLabel })],
+    bands, series,
+  }, data, container);
+  readout(plot, container, meta);
+  return responsive(plot, container);
+}
+
+/**
+ * Individuals control chart: one value per shot in sequence, with the centre
+ * line and ±kσ limits of each stretch pulled the same way, and the points
+ * outside them marked. `points` and `segments` as the stats endpoint returns
+ * them; `metric` is "seconds" or "ratio".
+ */
+export function controlChart(container, points, segments, metric, { unit, digits = 1, label, dateOf }) {
+  const c = colors();
+  // A null entry half a step after each stretch, so the limits of one do
+  // not join those of the next with a slanted line; the value line spans it.
+  const rows = [];
+  points.forEach((p, i) => {
+    rows.push({ x: p.seq, p });
+    if (i + 1 < points.length && points[i + 1].segment !== p.segment) rows.push({ x: p.seq + 0.5, p: null });
+  });
+  const seq = rows.map((r) => r.x);
+  const value = rows.map((r) => (r.p ? r.p[metric] : null));
+  const limits = (key) => rows.map((r) => {
+    const s = r.p?.segment == null ? null : segments[r.p.segment]?.[metric];
+    return s ? s[key] : null;
+  });
+  const outside = rows.map((r) => (r.p && r.p[metric] != null && r.p[`out_${metric}`] ? r.p[metric] : null));
+  const pointAt = (x) => points[Math.round(x) - 1];
+  const fmt = (v) => `${v.toFixed(digits)}${unit ? " " + unit : ""}`;
+  const plot = new uPlot({
+    width: container.clientWidth, height: 260,
+    cursor: { drag: { x: false, y: false } },
+    legend: { show: false },
+    scales: { x: { time: false }, y: {} },
+    axes: [axis({ scale: "x", label: "#", values: (u, vals) => vals.map((v) => (Number.isInteger(v) && pointAt(v) ? "#" + pointAt(v).id : "")) }), axis({ scale: "y", label: unit })],
+    bands: [{ series: [1, 2], fill: alpha(c.accent, 0.1) }],
+    series: [
+      {},
+      { ...edge(), label: "ucl" },
+      { ...edge(), label: "lcl" },
+      { label: "center", stroke: c.accent, width: 1, points: { show: false } },
+      { label, stroke: c.text, width: 1, spanGaps: true, points: { show: true, size: 5 } },
+      { label: "outside", stroke: c.temp, fill: c.temp, paths: uPlot.paths.points({ size: 9 }), points: { show: true, size: 9 } },
+    ],
+  }, [seq, limits("ucl"), limits("lcl"), limits("center"), value, outside], container);
+  readout(plot, container, [
+    { name: label, color: c.text, series: 4, fmt, label: "", idle: points.length ? fmt(points[points.length - 1][metric]) : "–", x: (v) => (Number.isInteger(v) && pointAt(v) ? `#${pointAt(v).id} · ${dateOf(pointAt(v).started_at)}` : "") },
+    { name: "±" + String.fromCharCode(963), color: c.accent, series: 3, fmt, label: "", idle: "" },
+  ]);
+  return responsive(plot, container);
+}
