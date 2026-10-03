@@ -330,6 +330,13 @@ export function machineChart(container, samples, shots, sessions, events = [], m
 export function scatterChart(container, xs, ys, groups, labels, { xLabel, yLabel, time = false, yRange } = {}) {
   const c = colors();
   const palette = [c.accent, c.flow, c.weight, c.temp, "#c9a0dc", "#8fb8a8"];
+  // uPlot takes x as ascending and finds the visible range by binary search
+  // on it; points arrive in shot order, which for a scatter by settledness is
+  // not ascending, and the chart then showed one point (2026-10-03).
+  const order = xs.map((_, i) => i).sort((a, b) => xs[a] - xs[b]);
+  xs = order.map((i) => xs[i]);
+  ys = order.map((i) => ys[i]);
+  groups = order.map((i) => groups[i]);
   const uniq = [...new Set(groups)];
   const series = [{}];
   const data = [xs];
