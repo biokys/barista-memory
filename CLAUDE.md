@@ -166,7 +166,10 @@ backflush on the flagged `Backflush` profile leaves no index entry and no
 was invisible to ingest. Backflushes are therefore watched live:
 `statusStream.ts` keeps one WebSocket open (the machine's own UI does the same)
 and `flushWatch.ts` logs a backflush when the selected profile is utility and
-a process is active for ≥ 20 s. The `evt:status` shape differs between
+a process is active for ≥ 20 s; a utility profile named for descaling
+(`Descale`, one 150 ml dose per start, pumped-water target) logs `descale`
+instead, once per six hours, since a descaling is several doses with
+pauses (2026-10-07). The `evt:status` shape differs between
 firmware versions (the device omits `pr`, `fl` and `process` when idle, and
 the checkout is older than the device), ; the watcher logs a line when a
 utility run starts and when it is logged or discarded (the 5 s trace that

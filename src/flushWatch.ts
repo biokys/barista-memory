@@ -7,6 +7,8 @@ import { listProfiles } from "./device/client.js";
 const MIN_FLUSH_S = 20;
 /** Two detections closer than this are the same cycle seen twice. */
 const DEDUPE_S = 10 * 60;
+/** Descaling is several doses with pauses between; runs within this window are one session. */
+const DESCALE_DEDUPE_S = 6 * 3600;
 /** How long to trust the profile list before asking the machine again. */
 const PROFILE_CACHE_S = 10 * 60;
 /** An unknown profile id triggers a refresh, but not more often than this. */
@@ -21,7 +23,16 @@ interface Run {
 }
 
 /**
- * Turns the status stream into backflush log entries.
+ * Which routine a utility profile stands for, by its label: the firmware has
+ * one flag for all of them. Anything not named for descaling is a backflush,
+ * which is what a utility profile was before the Descale profile existed.
+ */
+function routineFor(label: string): "backflush" | "descale" {
+  return /descal|odv[aá]p/i.test(label) ? "descale" : "backflush";
+}
+
+/**
+ * Turns the status stream into backflush and descale log entries.
  *
  * A run counts when a process is active on a utility profile: the process
  * block's own `u` flag where the firmware sends one, otherwise the selected
@@ -63,12 +74,13 @@ export function createFlushWatcher(db: DatabaseSync, log: (line: string) => void
     run = null;
     const duration = now - startedAt;
     if (duration < MIN_FLUSH_S) { log(`flush watch: ${label} ran ${duration.toFixed(0)} s, too short to count`); return; }
-    const dup = db
-      .prepare("SELECT id FROM maintenance_log WHERE type_key IN ('backflush', 'cafiza') AND ABS(at - ?) < ?")
-      .get(startedAt, DEDUPE_S);
+    const routine = routineFor(label);
+    const dup = routine === "descale"
+      ? db.prepare("SELECT id FROM maintenance_log WHERE type_key = 'descale' AND ABS(at - ?) < ?").get(startedAt, DESCALE_DEDUPE_S)
+      : db.prepare("SELECT id FROM maintenance_log WHERE type_key IN ('backflush', 'cafiza') AND ABS(at - ?) < ?").get(startedAt, DEDUPE_S);
     if (dup) { log(`flush watch: ${label} already logged`); return; }
-    logMaintenance(db, "backflush", { at: Math.floor(startedAt), auto: true, note: label });
-    log(`flush watch: ${label} ran ${duration.toFixed(0)} s, logged as backflush`);
+    logMaintenance(db, routine, { at: Math.floor(startedAt), auto: true, note: label });
+    log(`flush watch: ${label} ran ${duration.toFixed(0)} s, logged as ${routine}`);
   };
 
   return {
