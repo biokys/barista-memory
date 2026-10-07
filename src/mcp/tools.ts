@@ -26,7 +26,7 @@ import { powerSessions, currentConditions, MODE_NAMES } from "../machineState.js
 import { setCaption, CAPTION_MAX_CHARS } from "../captions.js";
 import { grinderPreferences } from "../grinder.js";
 
-const MCP_VERSION = "0.7.3";
+const MCP_VERSION = "0.7.4";
 
 /** The profile fields of a save_profile / propose_profile call, as the profile module takes them. */
 function profileSpecFrom(args: Record<string, unknown> | undefined): ProfileSpec {

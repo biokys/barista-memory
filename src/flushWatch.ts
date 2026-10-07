@@ -104,7 +104,13 @@ export function createFlushWatcher(db: DatabaseSync, log: (line: string) => void
         if (!run) {
           run = { startedAt: now - (ev.process?.e ?? 0) / 1000, lastSeen: now, label: ev.p ?? "utility profile" };
           log(`flush watch: ${run.label} started`);
-        } else run.lastSeen = now;
+        } else {
+          run.lastSeen = now;
+          // The profile half of the status can be one message behind the
+          // process half at the start ("Light 94 started" on a backflush), and
+          // the label decides which routine is logged, so the last seen wins.
+          if (ev.p) run.label = ev.p;
+        }
       } else if (run) {
         finish(now);
       }
