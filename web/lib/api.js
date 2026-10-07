@@ -19,6 +19,7 @@ export const api = {
   shots: (q = {}) => call("GET", "api/shots?" + new URLSearchParams(q)),
   shot: (id) => call("GET", `api/shots/${id}`),
   rate: (id, rating, note) => call("POST", `api/shots/${id}/rating`, { rating, note }),
+  setShotKind: (id, kind) => call("PATCH", `api/shots/${id}/kind`, { kind }),
   coffees: (archived = false) => call("GET", "api/coffees" + (archived ? "?archived=1" : "")),
   coffee: (id) => call("GET", `api/coffees/${id}`),
   createCoffee: (input) => call("POST", "api/coffees", input),

@@ -24,11 +24,14 @@ interface Run {
 
 /**
  * Which routine a utility profile stands for, by its label: the firmware has
- * one flag for all of them. Anything not named for descaling is a backflush,
- * which is what a utility profile was before the Descale profile existed.
+ * one flag for all of them. A rinse (water through the group, no coffee) is
+ * no routine and is logged nowhere. Anything else is a backflush, which is
+ * what a utility profile was before the Descale and Rinse profiles existed.
  */
-function routineFor(label: string): "backflush" | "descale" {
-  return /descal|odv[aá]p/i.test(label) ? "descale" : "backflush";
+function routineFor(label: string): "backflush" | "descale" | null {
+  if (/descal|odv[aá]p/i.test(label)) return "descale";
+  if (/rinse|propl|purge/i.test(label)) return null;
+  return "backflush";
 }
 
 /**
@@ -75,6 +78,7 @@ export function createFlushWatcher(db: DatabaseSync, log: (line: string) => void
     const duration = now - startedAt;
     if (duration < MIN_FLUSH_S) { log(`flush watch: ${label} ran ${duration.toFixed(0)} s, too short to count`); return; }
     const routine = routineFor(label);
+    if (!routine) { log(`flush watch: ${label} ran ${duration.toFixed(0)} s, a rinse, not logged`); return; }
     const dup = routine === "descale"
       ? db.prepare("SELECT id FROM maintenance_log WHERE type_key = 'descale' AND ABS(at - ?) < ?").get(startedAt, DESCALE_DEDUPE_S)
       : db.prepare("SELECT id FROM maintenance_log WHERE type_key IN ('backflush', 'cafiza') AND ABS(at - ?) < ?").get(startedAt, DEDUPE_S);

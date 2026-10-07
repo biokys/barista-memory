@@ -117,6 +117,11 @@ newest incomplete entry waits for a later pass, and a shot archived incomplete
 is fetched again once the device marks it complete. The same retry covers a
 completed shot whose `.slog` came back as 0 bytes: shots 6 and 22 were
 archived that way and their data was lost when the device was wiped.
+For the same reason a shot row is never deleted: the machine still holds it
+and the next pass would archive it again. A run that was not a coffee is
+reclassified (`setShotKind`, kinds shot | flush | rinse); only `kind = 'shot'`
+reaches `shot_context`, so it leaves every statistic and stays archived
+(three rinses on a profile not flagged utility, 2026-10-07).
 
 **The device's own notes are archived verbatim** in `shots.device_notes`.
 What is typed into the machine's web UI exists only there. They are read

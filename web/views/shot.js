@@ -124,6 +124,20 @@ export async function renderShot(view, [id]) {
       </div>`;
     return;
   }
+  if (data.excluded) {
+    const x = data.excluded;
+    view.innerHTML = `
+      <div class="card" style="text-align:center;padding:48px 24px">
+        <h1>${t("shot.excluded_title", { id: x.id })}</h1>
+        <p class="muted" style="margin-top:8px">${fmt.dateLong(x.started_at)} · ${fmt.time(x.started_at)} · ${x.profile_name ?? ""}</p>
+        <p class="muted" style="margin-top:8px">${t("shot.excluded_hint", { kind: t("shot.kind." + x.kind) })}</p>
+        <p style="margin-top:20px"><button class="btn" id="include">${t("shot.include")}</button> <a class="btn ghost" href="#/shots">${t("nav.history")}</a></p>
+      </div>`;
+    view.querySelector("#include").onclick = async () => {
+      try { await api.setShotKind(x.id, "shot"); toast(t("shot.kind_changed", { id: x.id, kind: t("shot.kind.shot") })); renderShot(view, [id]); } catch (err) { toast(String(err.message), "bad"); }
+    };
+    return;
+  }
   const { context: c, machine: m, shot } = data;
   const assistant = await api.assistantStatus();
   const readiness = m?.settledness == null ? null : m.settledness >= 85 ? "ok" : m.settledness >= 60 ? "warn" : "bad";
@@ -142,6 +156,7 @@ export async function renderShot(view, [id]) {
         <a class="btn sm ghost" href="api/shots/${c.id}/receipt.png" target="_blank" rel="noopener">${t("shot.receipt")}</a>
         ${data.profile_snapshot ? `<a class="btn sm ghost" href="api/shots/${c.id}/profile.json" download title="${t("shot.download_profile_hint")}">${t("shot.download_profile")}</a>` : ""}
         <button class="btn sm ghost" id="print">${t("shot.print")}</button>
+        <button class="btn sm ghost" id="exclude" title="${t("shot.exclude_hint")}">${t("shot.exclude")}</button>
         ${data.prev_id ? `<a class="btn sm ghost" href="#/shots/${data.prev_id}">← ${t("shot.prev")}</a>` : ""}
         ${data.next_id ? `<a class="btn sm ghost" href="#/shots/${data.next_id}">${t("shot.next")} →</a>` : ""}
       </div>
@@ -250,6 +265,10 @@ export async function renderShot(view, [id]) {
   // next to "Receipt" and "Previous" where a stray tap lands easily — so it
   // asks first, like the other actions that cannot be undone. While the job
   // runs the label says so; a bare greyed-out button read as "broken".
+  view.querySelector("#exclude").onclick = async () => {
+    if (!confirm(t("shot.exclude_confirm", { id: c.id }))) return;
+    try { await api.setShotKind(c.id, "rinse"); toast(t("shot.kind_changed", { id: c.id, kind: t("shot.kind.rinse") })); location.hash = "#/shots"; } catch (err) { toast(String(err.message), "bad"); }
+  };
   view.querySelector("#print").onclick = async (e) => {
     if (!confirm(t("shot.print_confirm", { id: c.id }))) return;
     const button = e.currentTarget; const label = button.textContent;

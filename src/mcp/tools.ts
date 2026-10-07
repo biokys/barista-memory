@@ -11,7 +11,7 @@ import { loadArchivedShot } from "../shots.js";
 import { saveProfileMerged, planProfileSave, type ProfileSpec, selectProfileOnMachine } from "../profiles.js";
 import { recordEvent, listEvents, eraOf, EVENT_KINDS } from "../events.js";
 import { changeMode, SWITCHABLE_MODES } from "../machineControl.js";
-import { maintenanceStatus, logMaintenance, listMaintenanceLog, markLastFlushAsCafiza, MAINTENANCE_KEYS } from "../maintenance.js";
+import { maintenanceStatus, logMaintenance, listMaintenanceLog, markLastFlushAsCafiza, MAINTENANCE_KEYS, setShotKind, shotRecord, SHOT_KINDS, type ShotKind } from "../maintenance.js";
 import { groupSettings } from "../device/machineSettings.js";
 import { PHASE_ARRAY_SCHEMA } from "./profileSchema.js";
 import { recordSetup, moveSetup, updateSetup } from "../setups.js";
@@ -26,7 +26,7 @@ import { powerSessions, currentConditions, MODE_NAMES } from "../machineState.js
 import { setCaption, CAPTION_MAX_CHARS } from "../captions.js";
 import { grinderPreferences } from "../grinder.js";
 
-const MCP_VERSION = "0.7.2";
+const MCP_VERSION = "0.7.3";
 
 /** The profile fields of a save_profile / propose_profile call, as the profile module takes them. */
 function profileSpecFrom(args: Record<string, unknown> | undefined): ProfileSpec {
@@ -419,6 +419,20 @@ export const TOOLS: Tool[] = [
     },
   },
   {
+    name: "set_shot_kind",
+    description:
+      "Reclassify an archived run: 'shot' (a coffee), 'flush' (a backflush, logged as maintenance) or 'rinse' " +
+      "(water through the group, counted nowhere). For a run that was not a coffee — a rinse or a test on a " +
+      "profile not flagged utility. Runs are never deleted: ingest matches the archive against the machine and a " +
+      "deleted run would come back; a kind other than 'shot' keeps it archived and out of every statistic, the " +
+      "history and notes sync, and can be undone.",
+    inputSchema: {
+      type: "object",
+      properties: { shot_id: { type: "number" }, kind: { type: "string", enum: ["shot", "flush", "rinse"] } },
+      required: ["shot_id", "kind"],
+    },
+  },
+  {
     name: "rate_shot",
     description: "Record how a shot actually tasted. Kept separate from anything the machine measured.",
     inputSchema: {
@@ -650,7 +664,11 @@ export async function callTool(db: DatabaseSync, name: string, args: ToolArgs): 
 
       case "get_archived_shot": {
         const loaded = loadArchivedShot(db, args!.shot_id as number, (args?.include_full_curve as boolean) ?? false);
-        if (!loaded) return fail(`Shot ${args!.shot_id} is not in the archive`, "SHOT_NOT_FOUND");
+        if (!loaded) {
+          const record = shotRecord(db, Number(args!.shot_id));
+          if (record && record.kind !== "shot") return fail(`Shot ${args!.shot_id} is archived but classified as ${record.kind}, not a coffee; set_shot_kind can change that`, "SHOT_EXCLUDED");
+          return fail(`Shot ${args!.shot_id} is not in the archive`, "SHOT_NOT_FOUND");
+        }
         return ok({ ...loaded, era: eraOf(db, loaded.context.started_at), verdict: verdictFor(db, loaded.context), analysis: getAnalysis(db, loaded.context.id) });
       }
 
@@ -758,6 +776,14 @@ export async function callTool(db: DatabaseSync, name: string, args: ToolArgs): 
             "Reconstructed from status polling, not from the machine, which keeps no uptime. " +
             "A session boundary is a poll that got no answer, so resolution is the poll interval.",
         });
+      }
+
+      case "set_shot_kind": {
+        const kind = String(args?.kind ?? "");
+        if (!(SHOT_KINDS as readonly string[]).includes(kind)) return fail(`kind must be one of ${SHOT_KINDS.join(", ")}`, "BAD_KIND");
+        const record = setShotKind(db, Number(args?.shot_id), kind as ShotKind);
+        if (!record) return fail(`Shot ${args?.shot_id} is not in the archive`, "SHOT_NOT_FOUND");
+        return ok({ shot: record });
       }
 
       case "rate_shot": {

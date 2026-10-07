@@ -40,6 +40,7 @@ import { recordEvent, updateEvent, deleteEvent, listEvents, eraOf, EVENT_KINDS }
 import {
   maintenanceStatus, logMaintenance, listMaintenanceLog, deleteMaintenanceLog,
   markLastFlushAsCafiza, updateMaintenanceType, MAINTENANCE_KEYS,
+  setShotKind, shotRecord, SHOT_KINDS, type ShotKind,
 } from "../maintenance.js";
 
 /**
@@ -290,9 +291,22 @@ route("GET", "/api/printer/status", async (_req, res) => {
   json(res, result.ok ? 200 : 502, result);
 });
 
+route("PATCH", "/api/shots/:id/kind", async (req, res, p) => {
+  const kind = String((await readJson(req)).kind ?? "");
+  if (!(SHOT_KINDS as readonly string[]).includes(kind)) return json(res, 400, { error: "BAD_KIND", message: `kind must be one of ${SHOT_KINDS.join(", ")}` });
+  const record = setShotKind(db, Number(p.id), kind as ShotKind);
+  if (!record) return json(res, 404, { error: "SHOT_NOT_FOUND" });
+  json(res, 200, { shot: record });
+});
+
 route("GET", "/api/shots/:id", async (_req, res, p) => {
   const loaded = loadArchivedShot(db, Number(p.id), true);
-  if (!loaded) return json(res, 404, { error: "SHOT_NOT_FOUND" });
+  if (!loaded) {
+    // Archived but not a coffee: the page shows what it is and offers the way back.
+    const record = shotRecord(db, Number(p.id));
+    if (record && record.kind !== "shot") return json(res, 200, { excluded: record });
+    return json(res, 404, { error: "SHOT_NOT_FOUND" });
+  }
   // Neighbours, for the previous/next links and the default comparison —
   // from shot_context, so a flush archived between two coffees is skipped
   // instead of leading to a "not found" page.

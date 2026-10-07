@@ -220,3 +220,33 @@ export function classifyShots(db: DatabaseSync, utilityIds: Set<string> | null, 
   }
   return n;
 }
+
+/** How an archived run is counted: a coffee, a backflush, or water through the group. Only 'shot' reaches shot_context. */
+export const SHOT_KINDS = ["shot", "flush", "rinse"] as const;
+export type ShotKind = (typeof SHOT_KINDS)[number];
+
+export interface ShotRecord { id: number; device_id: number | null; kind: ShotKind; started_at: number; profile_name: string | null }
+
+export function shotRecord(db: DatabaseSync, id: number): ShotRecord | null {
+  return (db.prepare("SELECT id, device_id, kind, started_at, profile_name FROM shots WHERE id = ?").get(id) as ShotRecord | undefined) ?? null;
+}
+
+/**
+ * Reclassify a run by hand. Never delete one: ingest takes the set
+ * difference against the machine, so a deleted run the machine still holds
+ * comes back on the next pass. A kind other than 'shot' keeps it archived
+ * and out of every coffee statistic, the history, notes sync and the
+ * receipts (a rinse on a profile not flagged utility was archived as three
+ * coffees, 2026-10-07). A flush is also a backflush in the maintenance log,
+ * as the automatic classification would have made it; leaving 'flush'
+ * takes that entry back.
+ */
+export function setShotKind(db: DatabaseSync, id: number, kind: ShotKind): ShotRecord | null {
+  if (!SHOT_KINDS.includes(kind)) throw new Error(`Unknown kind "${kind}"`);
+  const before = shotRecord(db, id);
+  if (!before) return null;
+  db.prepare("UPDATE shots SET kind = ? WHERE id = ?").run(kind, id);
+  if (kind === "flush") logDetectedFlush(db, id, before.started_at);
+  else if (before.kind === "flush") db.prepare("DELETE FROM maintenance_log WHERE shot_id = ? AND auto = 1").run(id);
+  return shotRecord(db, id);
+}
