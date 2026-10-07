@@ -5,7 +5,7 @@ import { currentSetup } from "../db/db.js";
 import { printerSettings } from "../printer/index.js";
 import { grinderPreferences, describeGrinder } from "../grinder.js";
 import { SYSTEM_PROMPT } from "./prompt.js";
-import { ASSISTANT_TOOLS, runAssistantTool } from "./tools.js";
+import { ASSISTANT_TOOLS, PROPOSAL_TOOLS, runAssistantTool } from "./tools.js";
 import { appendMessage, getConversation, messagesFor, recordUsage, usageOf, addUsage, estimateCostUsd, NO_USAGE, type TokenUsage } from "./conversations.js";
 
 /**
@@ -18,7 +18,7 @@ import { appendMessage, getConversation, messagesFor, recordUsage, usageOf, addU
 export type AssistantEvent =
   | { type: "text"; text: string }
   | { type: "tool"; name: string; input: unknown }
-  | { type: "tool_result"; name: string; ok: boolean }
+  | { type: "tool_result"; name: string; ok: boolean; data?: unknown }
   | { type: "done"; usage: TokenUsage; cost_usd: number | null }
   | { type: "error"; code: string; message: string };
 
@@ -35,6 +35,10 @@ export function anthropicClient(): Anthropic {
 
 export function assistantEnabled(): boolean {
   return config.anthropicApiKey.length > 0;
+}
+
+function parseResult(text: string): unknown {
+  try { return JSON.parse(text); } catch { return undefined; }
 }
 
 /** Conversations with a turn in flight: a second message to the same one is refused, not queued. */
@@ -130,7 +134,8 @@ export async function runTurn(
       for (const use of toolUses) {
         emit({ type: "tool", name: use.name, input: use.input });
         const outcome = await runAssistantTool(db, use.name, use.input);
-        emit({ type: "tool_result", name: use.name, ok: !outcome.isError });
+        const data = PROPOSAL_TOOLS.has(use.name) && !outcome.isError ? parseResult(outcome.text) : undefined;
+        emit({ type: "tool_result", name: use.name, ok: !outcome.isError, ...(data !== undefined ? { data } : {}) });
         results.push({ type: "tool_result", tool_use_id: use.id, content: outcome.text, is_error: outcome.isError || undefined });
       }
       messages.push({ role: "user", content: results });

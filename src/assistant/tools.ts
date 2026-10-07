@@ -29,6 +29,13 @@ export const ASSISTANT_TOOLS: Anthropic.Tool[] = TOOLS.filter((tool) => !WITHHEL
 const ALLOWED = new Set(ASSISTANT_TOOLS.map((tool) => tool.name));
 
 /**
+ * Tools whose result the web UI shows as a card with a button: the model
+ * proposes, the user confirms, and only the click writes to the machine.
+ * Their results travel with the tool line (stream and stored thread alike).
+ */
+export const PROPOSAL_TOOLS = new Set(["propose_profile"]);
+
+/**
  * Longest tool result handed to the model. A full curve is a few hundred
  * samples and fits; a runaway query does not, and the cut is announced
  * rather than silent so the model knows the JSON is incomplete.

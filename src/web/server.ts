@@ -667,6 +667,13 @@ route("PUT", "/api/profiles/:id", async (req, res, p) => {
   json(res, 200, result);
 });
 
+route("POST", "/api/profiles", async (req, res) => {
+  if (!(await requireMachine(res))) return;
+  const result = await saveProfileMerged(await readJson(req));
+  if (!result.ok) return json(res, result.code === "PROFILE_NOT_FOUND" ? 404 : result.code === "MISSING_PARAMETER" ? 400 : 502, { error: result.code, message: result.message });
+  json(res, 200, result);
+});
+
 route("POST", "/api/profiles/:id/select", async (_req, res, p) => {
   if (!(await requireMachine(res))) return;
   const result = await selectProfileOnMachine(p.id);

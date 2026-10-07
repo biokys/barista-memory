@@ -8,7 +8,7 @@ import { listProfiles, getProfile, fetchRawSettings } from "../device/client.js"
 import { liveStatus } from "../liveStatus.js";
 import { printShot, printerStatus } from "../printer/index.js";
 import { loadArchivedShot } from "../shots.js";
-import { saveProfileMerged, selectProfileOnMachine } from "../profiles.js";
+import { saveProfileMerged, planProfileSave, type ProfileSpec, selectProfileOnMachine } from "../profiles.js";
 import { recordEvent, listEvents, eraOf, EVENT_KINDS } from "../events.js";
 import { changeMode, SWITCHABLE_MODES } from "../machineControl.js";
 import { maintenanceStatus, logMaintenance, listMaintenanceLog, markLastFlushAsCafiza, MAINTENANCE_KEYS } from "../maintenance.js";
@@ -26,7 +26,17 @@ import { powerSessions, currentConditions, MODE_NAMES } from "../machineState.js
 import { setCaption, CAPTION_MAX_CHARS } from "../captions.js";
 import { grinderPreferences } from "../grinder.js";
 
-const MCP_VERSION = "0.7.1";
+const MCP_VERSION = "0.7.2";
+
+/** The profile fields of a save_profile / propose_profile call, as the profile module takes them. */
+function profileSpecFrom(args: Record<string, unknown> | undefined): ProfileSpec {
+  return {
+    profile_id: args?.profile_id as string | undefined, label: args?.label as string | undefined,
+    temperature: args?.temperature as number | undefined, phases: args?.phases as any[] | undefined,
+    type: args?.type as string | undefined, description: args?.description as string | undefined,
+    favorite: args?.favorite as boolean | undefined, utility: args?.utility as boolean | undefined,
+  };
+}
 
 /** One tool call's outcome, in the MCP's own shape; the assistant reads the same object. */
 export interface ToolResult {
@@ -297,6 +307,26 @@ export const TOOLS: Tool[] = [
       "exists): fields left out keep their current value, so changing one phase's transition does not touch the " +
       "description, favourite flag or the other phases. To create, pass a new label with temperature and phases. " +
       "Set utility: true for maintenance profiles such as backflush.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        profile_id: { type: "string", description: "Update this exact profile. Omit to match by label or create." },
+        label: { type: "string", description: "Profile name; also used to find an existing profile when profile_id is omitted." },
+        temperature: { type: "number", description: "Target water temperature in °C. Default for phases that set none." },
+        phases: PHASE_ARRAY_SCHEMA,
+        type: { type: "string", enum: ["standard", "pro"] },
+        description: { type: "string" },
+        favorite: { type: "boolean" },
+        utility: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "propose_profile",
+    description:
+      "Prepare a profile change without writing it: the same fields as save_profile, answered with the profile " +
+      "exactly as a save would store it (fields left out keep their current value). In the app the user confirms " +
+      "it with a Save button; from the MCP, call save_profile with the same fields to write it.",
     inputSchema: {
       type: "object",
       properties: {
@@ -643,14 +673,18 @@ export async function callTool(db: DatabaseSync, name: string, args: ToolArgs): 
       }
 
       case "save_profile": {
-        const result = await saveProfileMerged({
-          profile_id: args?.profile_id as string | undefined, label: args?.label as string | undefined,
-          temperature: args?.temperature as number | undefined, phases: args?.phases as any[] | undefined,
-          type: args?.type as string | undefined, description: args?.description as string | undefined,
-          favorite: args?.favorite as boolean | undefined, utility: args?.utility as boolean | undefined,
-        });
+        const result = await saveProfileMerged(profileSpecFrom(args));
         if (!result.ok) return fail(result.message, result.code);
         return ok({ profile: result.profile, action: result.action });
+      }
+
+      case "propose_profile": {
+        const plan = await planProfileSave(profileSpecFrom(args));
+        if (!plan.ok) return fail(plan.message, plan.code);
+        return ok({
+          proposal: { profile: plan.profile, action: plan.action },
+          note: "Nothing was written. In the app the user confirms this with the Save button; from the MCP, call save_profile with the same fields.",
+        });
       }
 
       case "get_machine_settings": {

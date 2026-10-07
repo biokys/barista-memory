@@ -16,13 +16,15 @@ export type SaveResult =
   | { ok: false; code: string; message: string };
 
 /**
- * Save a profile by merging the caller's fields onto the existing one.
+ * The profile a save would store, by merging the caller's fields onto the
+ * existing one — without storing it.
  *
  * The machine replaces the whole profile on save, so a caller who sends only
  * the field they want to change loses the rest — the old server came back with
- * selected: false after a one-field edit. Shared by the MCP and the web API.
+ * selected: false after a one-field edit. The plan is also what the in-app
+ * assistant shows the user to confirm: it has no save tool of its own.
  */
-export async function saveProfileMerged(spec: ProfileSpec): Promise<SaveResult> {
+export async function planProfileSave(spec: ProfileSpec): Promise<SaveResult> {
   const profiles = await listProfiles();
   if (!profiles) return { ok: false, code: "MACHINE_UNREACHABLE", message: "No answer from the machine" };
 
@@ -65,9 +67,16 @@ export async function saveProfileMerged(spec: ProfileSpec): Promise<SaveResult> 
     phases,
   };
 
-  const result = await saveProfile(profile);
+  return { ok: true, profile, action: existing ? "updated" : "created" };
+}
+
+/** Save a profile by merging the caller's fields onto the existing one. Shared by the MCP and the web API. */
+export async function saveProfileMerged(spec: ProfileSpec): Promise<SaveResult> {
+  const plan = await planProfileSave(spec);
+  if (!plan.ok) return plan;
+  const result = await saveProfile(plan.profile);
   if (!result.ok) return { ok: false, code: "SAVE_FAILED", message: result.error };
-  return { ok: true, profile: result.profile, action: existing ? "updated" : "created" };
+  return { ok: true, profile: result.profile, action: plan.action };
 }
 
 export type SelectResult =

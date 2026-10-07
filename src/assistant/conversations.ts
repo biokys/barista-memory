@@ -1,5 +1,6 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import type { DatabaseSync } from "node:sqlite";
+import { PROPOSAL_TOOLS } from "./tools.js";
 
 /**
  * Conversations and their messages, stored as the API sees them so a
@@ -27,7 +28,8 @@ export interface DisplayMessage {
   id: number;
   role: "user" | "assistant";
   text: string;
-  tools: Array<{ name: string; input: unknown }>;
+  /** `result` only for the proposal tools: what the UI renders as a card. */
+  tools: Array<{ name: string; input: unknown; result?: unknown }>;
   created_at: number;
 }
 
@@ -78,6 +80,16 @@ export function appendMessage(db: DatabaseSync, conversationId: number, role: "u
 
 /** Messages as the UI shows them: tool results are folded into the assistant's turn that asked for them. */
 export function displayMessages(messages: StoredMessage[]): DisplayMessage[] {
+  // Tool results live in the user rows that follow a call; the card needs them next to the call.
+  const results = new Map<string, unknown>();
+  for (const m of messages) {
+    if (m.role !== "user" || m.text != null) continue;
+    for (const b of m.content) {
+      if (b.type !== "tool_result" || b.is_error) continue;
+      const text = typeof b.content === "string" ? b.content : (b.content ?? []).map((c) => (c.type === "text" ? c.text : "")).join("");
+      try { results.set(b.tool_use_id, JSON.parse(text)); } catch { /* not JSON: nothing to show */ }
+    }
+  }
   const out: DisplayMessage[] = [];
   for (const m of messages) {
     if (m.role === "user") {
@@ -87,7 +99,9 @@ export function displayMessages(messages: StoredMessage[]): DisplayMessage[] {
       continue;
     }
     const text = m.content.filter((b): b is Anthropic.TextBlockParam => b.type === "text").map((b) => b.text).join("");
-    const tools = m.content.filter((b): b is Anthropic.ToolUseBlockParam => b.type === "tool_use").map((b) => ({ name: b.name, input: b.input }));
+    const tools = m.content
+      .filter((b): b is Anthropic.ToolUseBlockParam => b.type === "tool_use")
+      .map((b) => ({ name: b.name, input: b.input, ...(PROPOSAL_TOOLS.has(b.name) && results.has(b.id) ? { result: results.get(b.id) } : {}) }));
     // Several assistant rows make one turn when tools were used; merge them so the UI shows one answer.
     const last = out[out.length - 1];
     if (last && last.role === "assistant") {

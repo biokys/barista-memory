@@ -302,6 +302,10 @@ select option { background: var(--surface-2); color: var(--text); }
 .msg-body .tool { font-size: .78rem; color: var(--text-3); padding: 2px 0; }
 .msg-body .tool::before { content: "›"; margin-right: 6px; }
 .msg-body .tool.bad { color: var(--bad); }
+.msg-body .proposal { margin: 8px 0; padding: 10px 12px; border: 1px solid var(--line-2); border-radius: var(--radius-s); background-color: var(--bg-2); }
+.msg-body .proposal table { margin-top: 6px; font-size: .8rem; }
+.msg-body .proposal td { padding: 4px 6px; }
+.msg-body .proposal.saved { border-color: var(--ok); }
 .msg-body .bad { color: var(--bad); }
 .chat-form { display: flex; gap: 8px; align-items: flex-end; }
 .chat-form textarea { flex: 1; resize: none; min-height: 42px; background-color: var(--bg-2); border: 1px solid var(--line-2); border-radius: var(--radius-s); padding: 10px 12px; outline: none; }
