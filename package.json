@@ -11,7 +11,8 @@
     "mcp": "node dist/mcp/server.js",
     "cli": "node dist/cli.js",
     "deploy": "scripts/deploy.sh",
-    "web": "node dist/web/server.js"
+    "web": "node dist/web/server.js",
+    "test": "npm run build && node --test \"dist/**/*.test.js\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.128.0",

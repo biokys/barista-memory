@@ -200,6 +200,18 @@ run. Status is computed from the log and the archive, never stored, and the
 intervals are yours to change. The home page shows one chip per routine, red
 only when overdue.
 
+**Live telemetry.** `GET api/live` is a Server-Sent Events stream of the
+machine's state about twice a second — temperature and target, pressure and
+target, pump and puck flow, scale weight, the running phase and its progress
+— for a live extraction curve (the optional kiosk display uses it). It rides
+on the same machine socket as the backflush watch, so a container with any
+number of viewers keeps one connection to the machine; the web-only systemd
+service opens one with its first viewer and closes it two minutes after its
+last (so a viewer whose Wi-Fi drops mid-shot comes back to the whole run). Nothing
+is stored: the server keeps the latest state and the current (or last) run in
+memory, so a viewer that reconnects mid-shot still gets the whole curve.
+Events: `status`, `run` (on connect), `shot-saved`, `offline` / `online`.
+
 ### Using it from an AI assistant
 
 `src/mcp/tools.ts` holds the MCP tools; `src/mcp/server.ts` serves them over
@@ -394,7 +406,9 @@ src/
   events.ts              turning points (new tool, technique change) and eras
   maintenance.ts         cleaning routines: intervals, log, status
   flushWatch.ts          logs a backflush from the live status stream
-  device/statusStream.ts one persistent WebSocket to the machine's evt:status
+  device/statusStream.ts one persistent WebSocket to the machine's evt:status,
+                         shared by every consumer in the process
+  liveTelemetry.ts       the status stream merged and fanned out for api/live
   web/server.ts          JSON API + static files for the web UI
   cli.ts                 same operations without an MCP client
 web/                     the UI: no build step, ES modules, uPlot, Inter

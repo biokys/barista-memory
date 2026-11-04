@@ -186,6 +186,21 @@ and notes sync see coffees only. Maintenance status is computed from the log
 and the archive on every read — nothing about "due" is stored, so a changed
 interval or a backdated entry applies at once.
 
+**One socket to the machine per process.** Every consumer of the status
+stream subscribes through `subscribeStatus()` in `statusStream.ts`, which opens
+the WebSocket with its first listener and closes it after its last. In the
+container the daemon's flush watch and every `api/live` viewer share it; the
+web-only systemd service opens one when its first viewer arrives. Never call
+`startStatusStream` directly from a new feature. `liveTelemetry.ts` keeps the
+two halves apart — a telemetry half replaces the previous one whole, so a
+field the firmware omits when idle reads as absent, not as the last shot's
+value — and holds only the latest state and the current or last run, in
+memory. It keeps its subscription two minutes after the last viewer leaves:
+the kiosk is usually the only viewer, and letting go at once wiped the run it
+reconnects for after a Wi-Fi drop. On firmware 1.9.0 (recorded 2026-11-04) the state half repeats every
+~10 s as well as on change, scale weight is in the telemetry (`bw`), and the
+`process` block outlives the run as `a: 0`, `l: "Finished"` for minutes.
+
 **A powered-off machine is silent, not refusing.** ARP gets no answer, so
 every request waits out its full timeout; with the daemon's 10 s each page of
 the web UI hung for 10 s while the machine was off (found 2026-09-22 when the
@@ -316,6 +331,7 @@ worse — do not reintroduce it.
 
 ```bash
 npm run build            # tsc, and copies schema.sql into dist/
+npm test                 # build, then node --test on dist/**/*.test.js
 npm run cli -- show      # what context is in force
 npm run cli -- ingest    # one archive pass
 npm run cli -- recompute-weights [--all]   # re-derive stable weights from stored logs

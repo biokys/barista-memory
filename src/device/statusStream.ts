@@ -7,18 +7,54 @@ import { wsUrl } from "../config.js";
  * change, and a fast "telemetry" half (temperatures, pressure, flow, the
  * process block) every 500 ms. Neither half is complete on its own, so
  * consumers merge them; `process: null` in the fast half means no process.
- * Only the fields this code reads are typed.
+ * Older firmware omits `pr`, `fl` and `process` from the idle telemetry.
+ *
+ * Only the fields this code reads are typed. Units and meanings are from a
+ * recording on firmware 1.9.0 (2026-11-04): the state half also repeats every
+ * ~10 s, not only on change; `pf`'s meaning is inferred from its behaviour.
  */
 export interface StatusEvent {
+  // State half.
   /** Mode: 0 standby, 1 brew, 2 steam, 3 water, 4 grind. */
   m?: number;
   /** Selected profile label and id. */
   p?: string;
   puid?: string;
+  /** Target weight of the selected profile, g. */
+  tw?: number;
+  /** A scale is connected; its battery in %, null without one. */
+  bc?: boolean;
+  sbat?: number | null;
+  // Telemetry half.
+  /** Boiler temperature (raw sensor minus the user's offset) and its target, °C. */
+  ct?: number;
+  tt?: number;
+  /** Pressure and target pressure, bar. */
   pr?: number;
+  pt?: number;
+  /** Pump flow, puck flow (inferred) and target flow, ml/s. */
   fl?: number;
-  /** a = active, e = elapsed ms, l = phase label, u = utility profile. */
-  process?: { a?: number; e?: number; l?: string; u?: number } | null;
+  pf?: number;
+  tf?: number;
+  /** Scale weight, g; `bw` and `cw` carried the same value in every sample. */
+  bw?: number;
+  cw?: number;
+  /** Heater and pump power, %. */
+  hp?: number;
+  pw?: number;
+  /**
+   * a = active (0 once finished: the block stays as "Finished" for a while),
+   * s = stage (infusion, brew), l = phase label, e = elapsed ms,
+   * u = utility profile, tt = phase target type (time | volumetric),
+   * pt = phase target (ms or g), pp = progress towards it. Steam sends {a} only.
+   */
+  process?: { a?: number; s?: string; l?: string; e?: number; u?: number; tt?: string; pt?: number; pp?: number } | null;
+}
+
+/** Any other message on the socket, e.g. `evt:history-shot-saved` with the device's shot `id`. */
+export interface DeviceMessage {
+  tp: string;
+  [key: string]: unknown;
 }
 
 const RECONNECT_MIN_MS = 5_000;
@@ -43,7 +79,11 @@ const HANDSHAKE_MS = 10_000;
  * history plugin returns early for those and never writes a log. One socket is
  * kept open (the machine's own web UI does the same) rather than one per poll.
  */
-export function startStatusStream(onStatus: (event: StatusEvent) => void, onGap?: () => void): () => void {
+export function startStatusStream(
+  onStatus: (event: StatusEvent) => void,
+  onGap?: () => void,
+  onMessage?: (message: DeviceMessage) => void
+): () => void {
   let stopped = false;
   let ws: WebSocket | null = null;
   let backoff = RECONNECT_MIN_MS;
@@ -65,6 +105,7 @@ export function startStatusStream(onStatus: (event: StatusEvent) => void, onGap?
       try {
         const msg = JSON.parse(data.toString());
         if (msg?.tp === "evt:status") onStatus(msg as StatusEvent);
+        else if (typeof msg?.tp === "string") onMessage?.(msg as DeviceMessage);
       } catch {
         // Anything that is not JSON is not a status event.
       }
@@ -88,3 +129,59 @@ export function startStatusStream(onStatus: (event: StatusEvent) => void, onGap?
     ws?.close();
   };
 }
+
+export interface StatusListener {
+  onStatus?: (event: StatusEvent) => void;
+  onGap?: () => void;
+  onMessage?: (message: DeviceMessage) => void;
+}
+
+type StartStream = typeof startStatusStream;
+
+/**
+ * One socket to the machine per process, however many consumers.
+ *
+ * In the container the daemon (flush watch) and the web server (`api/live`)
+ * run in one process and both want the stream; two sockets would double the
+ * load on the machine's small web server for no information. In the systemd
+ * deployment the web process has no daemon, so the socket must open with its
+ * first subscriber and close after its last. Reference counting gives both.
+ */
+export function createStatusHub(start: StartStream = startStatusStream) {
+  const listeners = new Set<StatusListener>();
+  let stop: (() => void) | null = null;
+
+  // One listener throwing must not starve the others.
+  const each = (call: (l: StatusListener) => void) => {
+    for (const l of [...listeners]) {
+      try { call(l); } catch (error) { console.error(`status listener failed: ${error instanceof Error ? error.message : error}`); }
+    }
+  };
+
+  return {
+    subscribe(listener: StatusListener): () => void {
+      listeners.add(listener);
+      if (!stop) {
+        stop = start(
+          (ev) => each((l) => l.onStatus?.(ev)),
+          () => each((l) => l.onGap?.()),
+          (msg) => each((l) => l.onMessage?.(msg))
+        );
+      }
+      let done = false;
+      return () => {
+        if (done) return;
+        done = true;
+        listeners.delete(listener);
+        if (listeners.size === 0 && stop) { stop(); stop = null; }
+      };
+    },
+    /** Listeners currently attached; for tests and diagnostics. */
+    size: () => listeners.size,
+  };
+}
+
+const hub = createStatusHub();
+
+/** Subscribe to the process-wide status stream; returns the unsubscribe. */
+export const subscribeStatus = (listener: StatusListener): (() => void) => hub.subscribe(listener);

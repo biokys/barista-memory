@@ -4,7 +4,7 @@ import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "./i
 import { recomputeAnalysis } from "./anomaly.js";
 import { fetchStatus } from "./device/client.js";
 import { recordState } from "./machineState.js";
-import { startStatusStream } from "./device/statusStream.js";
+import { subscribeStatus } from "./device/statusStream.js";
 import { createFlushWatcher } from "./flushWatch.js";
 import { startMqtt, type MqttBridge } from "./mqtt.js";
 import { printShot, printerSettings } from "./printer/index.js";
@@ -47,9 +47,10 @@ async function main(): Promise<void> {
   if (contextualised > 0) console.log(`derived machine context for ${contextualised} shot(s)`);
 
   // Backflushes are never written to the machine's history, so they are
-  // watched live instead of ingested.
+  // watched live instead of ingested. Through the shared hub: in the
+  // container the web server's api/live rides on the same socket.
   const flushWatcher = createFlushWatcher(db);
-  const stopStream = startStatusStream((ev) => flushWatcher.onStatus(ev), () => flushWatcher.onGap());
+  const stopStream = subscribeStatus({ onStatus: (ev) => flushWatcher.onStatus(ev), onGap: () => flushWatcher.onGap() });
 
   let mqttBridge: MqttBridge | null = null;
   if (config.mqttUrl) {
