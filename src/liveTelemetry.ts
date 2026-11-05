@@ -5,8 +5,8 @@ import { machineReachable } from "./liveStatus.js";
  * Live machine telemetry for `api/live`: the status stream's two halves merged
  * into one readable object per telemetry tick (~500 ms), fanned out to any
  * number of clients. Read-only — nothing is ever sent to the machine — and
- * nothing is stored but the latest state and the current (or last) run, in
- * memory.
+ * nothing is stored but the latest state and the current (or last) coffee,
+ * in memory.
  *
  * Field meanings and units come from a recording on firmware 1.9.0; see the
  * comments on StatusEvent.
@@ -46,8 +46,18 @@ export type LiveEvent =
   | { event: "online"; data: Record<string, never> };
 
 const MODES: LiveMode[] = ["standby", "brew", "steam", "water", "grind"];
-/** 5 minutes at 2 Hz. A coffee is under a minute; steam or a descale dose can run longer. */
+/** 5 minutes at 2 Hz. A coffee is under a minute; this only bounds a run that never ends. */
 export const MAX_RUN_SAMPLES = 600;
+
+/**
+ * Whether a status belongs to a coffee. A profile run names its phase; steam
+ * and hot water send a bare `{a: 1}` process block (firmware 1.9.0), and a
+ * backflush, a descale or a group flush runs flagged utility. The mode is no
+ * guide: the state half lags, and steam's first samples still read "brew".
+ */
+export function isCoffee(s: LiveStatus): boolean {
+  return s.process?.phase != null && s.process.utility !== true;
+}
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
@@ -111,8 +121,10 @@ export function createLiveTelemetry(options: LiveTelemetryOptions = {}) {
   let latest: LiveStatus | null = null;
   let online: boolean | null = null;
   let offlineSince = 0;
+  /** The current or last coffee. */
   let run: LiveStatus[] = [];
-  let collecting = false;
+  /** The run in progress, coffee or not; it becomes `run` once it shows it is one. */
+  let current: LiveStatus[] | null = null;
   let wasActive = false;
 
   const broadcast = (e: LiveEvent) => {
@@ -122,7 +134,7 @@ export function createLiveTelemetry(options: LiveTelemetryOptions = {}) {
   };
 
   const reset = () => {
-    state = {}; latest = null; online = null; run = []; collecting = false; wasActive = false;
+    state = {}; latest = null; online = null; run = []; current = null; wasActive = false;
   };
 
   const goOffline = () => {
@@ -138,16 +150,17 @@ export function createLiveTelemetry(options: LiveTelemetryOptions = {}) {
     const status = normalise(state, half, now());
     latest = status;
 
-    // The run buffer: a new run clears it, the run fills it, and it is kept
-    // after the run so a client that (re)connects later still gets the whole
-    // curve of the last shot. It is cleared only when the next run starts.
+    // The run buffer holds the last coffee, kept after the run so a client
+    // that (re)connects later still gets its whole curve. Only the next
+    // coffee replaces it: steaming the milk right after a shot must not.
     const active = status.process?.active === true;
-    if (active && !wasActive) { run = []; collecting = true; }
-    if (collecting) {
-      run.push(status);
-      if (run.length > maxRun) run.shift();
+    if (active && !wasActive) current = [];
+    if (current) {
+      current.push(status);
+      if (current.length > maxRun) current.shift();
+      if (run !== current && isCoffee(status)) run = current;
       // The first sample after the run (phase "Finished") is the last kept.
-      if (!active) collecting = false;
+      if (!active) current = null;
     }
     wasActive = active;
     broadcast({ event: "status", data: status });

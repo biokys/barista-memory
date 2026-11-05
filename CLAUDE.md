@@ -194,8 +194,11 @@ web-only systemd service opens one when its first viewer arrives. Never call
 `startStatusStream` directly from a new feature. `liveTelemetry.ts` keeps the
 two halves apart — a telemetry half replaces the previous one whole, so a
 field the firmware omits when idle reads as absent, not as the last shot's
-value — and holds only the latest state and the current or last run, in
-memory. It keeps its subscription two minutes after the last viewer leaves:
+value — and holds only the latest state and the current or last coffee, in
+memory. A coffee is a run whose process names its phase on a profile not
+flagged utility (`isCoffee`): steam and hot water send a bare `{a: 1}`, and
+steaming the milk right after a shot replaced its curve (2026-11-05). The
+mode cannot tell them apart; steam's first samples still read "brew". It keeps its subscription two minutes after the last viewer leaves:
 the kiosk is usually the only viewer, and letting go at once wiped the run it
 reconnects for after a Wi-Fi drop. On firmware 1.9.0 (recorded 2026-11-04) the state half repeats every
 ~10 s as well as on change, scale weight is in the telemetry (`bw`), and the

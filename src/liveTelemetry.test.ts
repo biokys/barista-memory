@@ -67,30 +67,49 @@ test("one status per telemetry message, merged with the state half", () => {
   assert.deepEqual(saved.map((e) => e.data), [{ deviceId: 197 }]);
 });
 
-test("a late client gets the whole last run; the next run clears it", () => {
+const runOf = (events: LiveEvent[]) => (events.find((e) => e.event === "run")!.data as { samples: any[] }).samples;
+
+test("a late client gets the whole last coffee; steam after it does not replace it", () => {
   const { live, replay } = setup();
   const keep = live.attach(() => {}); // keeps the subscription, as the daemon or a kiosk would
   replay((t) => t < STEAM);
 
   const late: LiveEvent[] = [];
   live.attach((e) => late.push(e));
-  const run = late.find((e) => e.event === "run")!.data as { samples: any[] };
-  assert.ok(run.samples.length > 50, `run has ${run.samples.length} samples`);
-  assert.equal(run.samples[0].process.phase, "Stabilize");
-  assert.ok(run.samples[0].process.elapsedMs <= 100);
-  assert.equal(run.samples.at(-1).process.phase, "Finished");
-  assert.equal(run.samples.filter((s) => !s.process.active).length, 1, "only the first Finished sample is kept");
+  const run = runOf(late);
+  assert.ok(run.length > 50, `run has ${run.length} samples`);
+  assert.equal(run[0].process.phase, "Stabilize");
+  assert.ok(run[0].process.elapsedMs <= 100);
+  assert.equal(run.at(-1).process.phase, "Finished");
+  assert.equal(run.filter((s) => !s.process.active).length, 1, "only the first Finished sample is kept");
 
-  // Steam starts a new run: a client attaching after that sees only steam.
+  // The recording ends in steam (a bare {a: 1} process block); a client
+  // attaching after it still gets the shot.
   replay((t) => t >= STEAM);
   const later: LiveEvent[] = [];
   live.attach((e) => later.push(e));
-  const steam = later.find((e) => e.event === "run")!.data as { samples: any[] };
-  assert.ok(steam.samples.length > 0);
-  assert.equal(steam.samples[0].process.active, true, "the new run starts at its first active sample");
-  // Steam's process block carries no phase; every shot sample has one. (The
-  // mode lags: the fixture's steam starts before the next 10 s state half.)
-  assert.ok(steam.samples.every((s) => s.process?.phase == null), "no sample of the shot is left");
+  assert.deepEqual(runOf(later), run);
+  keep();
+});
+
+test("a utility run is not a coffee; the next coffee replaces the last", () => {
+  const hub = fakeHub();
+  const live = createLiveTelemetry({ subscribe: hub.subscribe, probe: async () => true });
+  const keep = live.attach(() => {});
+  const tick = (process: Record<string, unknown>) => hub.deliver({ tp: "evt:status", ct: 93, process });
+  tick({ a: 1, u: 0, l: "Extraction" });
+  tick({ a: 0, u: 0, l: "Finished" });
+  const runNow = () => { const ev: LiveEvent[] = []; live.attach((e) => ev.push(e))(); return runOf(ev); };
+  assert.deepEqual(runNow().map((s) => s.process.phase), ["Extraction", "Finished"]);
+
+  // A backflush on a flagged profile names its phases too.
+  tick({ a: 1, u: 1, l: "Backflush" });
+  tick({ a: 0, u: 1, l: "Finished" });
+  assert.deepEqual(runNow().map((s) => s.process.phase), ["Extraction", "Finished"]);
+
+  // Mid-shot, a reconnecting client gets the coffee in progress, not the last one.
+  tick({ a: 1, u: 0, l: "Bloom" });
+  assert.deepEqual(runNow().map((s) => s.process.phase), ["Bloom"]);
   keep();
 });
 

@@ -208,8 +208,9 @@ on the same machine socket as the backflush watch, so a container with any
 number of viewers keeps one connection to the machine; the web-only systemd
 service opens one with its first viewer and closes it two minutes after its
 last (so a viewer whose Wi-Fi drops mid-shot comes back to the whole run). Nothing
-is stored: the server keeps the latest state and the current (or last) run in
-memory, so a viewer that reconnects mid-shot still gets the whole curve.
+is stored: the server keeps the latest state and the current (or last) coffee
+in memory, so a viewer that reconnects mid-shot still gets the whole curve.
+Steam, hot water and utility runs (backflush, descale) never replace it.
 Events: `status`, `run` (on connect), `shot-saved`, `offline` / `online`.
 
 ### Using it from an AI assistant
