@@ -4,6 +4,7 @@
 
 import { t, initI18n, currentLang, setLang } from "./lib/i18n.js";
 import { api } from "./lib/api.js";
+import { watchLive } from "./lib/live.js";
 import { renderNow } from "./views/now.js";
 import { renderHistory } from "./views/history.js";
 import { renderShot } from "./views/shot.js";
@@ -93,18 +94,33 @@ async function render() {
   location.hash = "#/";
 }
 
-// Live badge in the top bar: one cheap poll that every screen benefits from.
-async function pollLive() {
+// Live badge in the top bar. The poll brings what the server derives (trend,
+// settledness); between polls the temperature follows the live stream, and
+// the stream says at once when the machine goes off.
+const badgeState = { reachable: false, heating: false, temp: null, settledness: null };
+
+function paintBadge() {
   const badge = document.getElementById("live-badge");
+  const s = badgeState;
+  const on = s.reachable && s.temp != null;
+  const className = "live" + (on ? (s.heating ? " on heating" : " on") : "");
+  const text = on
+    ? `${s.temp.toFixed(0)} °C · ${t("machine.settledness_short", { n: s.settledness ?? "–" })}`
+    : t("machine.off");
+  // Twice a second from the stream: touch the DOM only when it reads differently.
+  if (badge.className !== className) badge.className = className;
+  if (badge.textContent !== text) badge.textContent = text;
+}
+
+async function pollLive() {
   try {
     const now = await api.now();
     const m = now.machine;
-    badge.className = "live" + (m.reachable ? (m.trend === "heating" ? " on heating" : " on") : "");
-    badge.textContent = m.reachable
-      ? `${m.current_temp.toFixed(0)} °C · ${t("machine.settledness_short", { n: m.settledness ?? "–" })}`
-      : t("machine.off");
+    Object.assign(badgeState, { reachable: m.reachable, heating: m.trend === "heating", temp: m.reachable ? m.current_temp : null, settledness: m.settledness });
+    paintBadge();
     document.dispatchEvent(new CustomEvent("live", { detail: now }));
   } catch {
+    const badge = document.getElementById("live-badge");
     badge.className = "live"; badge.textContent = t("error.offline");
   }
 }
@@ -177,4 +193,13 @@ applyTheme(false);
 window.addEventListener("hashchange", navigate);
 navigate();
 pollLive();
+watchLive({
+  onStatus: (status) => {
+    if (status.temperature.current == null) return;
+    Object.assign(badgeState, { reachable: true, temp: status.temperature.current });
+    paintBadge();
+  },
+  onOffline: () => { badgeState.reachable = false; paintBadge(); },
+  onOnline: () => pollLive(),
+});
 setInterval(pollLive, 20000);

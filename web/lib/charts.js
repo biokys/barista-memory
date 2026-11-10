@@ -215,6 +215,70 @@ export function shotChart(container, shot, compare = null, { stableWeight = null
   return responsive(plot, container);
 }
 
+/** The live chart's time axis starts this wide, so the first seconds are not stretched across it. */
+const LIVE_MIN_SECONDS = 30;
+/** Weight axis: at least this much, and this far above the profile's target weight. */
+const LIVE_MIN_WEIGHT_G = 50;
+const LIVE_WEIGHT_HEADROOM = 1.25;
+
+/**
+ * The coffee being pulled, from api/live samples: the same four curves and
+ * scales as shotChart, redrawn as samples arrive. Returns `update(samples)`
+ * and `destroy()`.
+ */
+export function liveChart(container) {
+  const c = colors();
+  let weightMax = LIVE_MIN_WEIGHT_G;
+  const plot = new uPlot({
+    width: container.clientWidth, height: 260,
+    cursor: { show: false },
+    legend: { show: false },
+    scales: {
+      x: { time: false, range: (u, min, max) => [0, Math.max(LIVE_MIN_SECONDS, max ?? 0)] },
+      y: { range: [0, 12] },
+      t: { range: (u, min, max) => (min == null ? [87, 97] : [Math.floor(Math.min(min, 88) - 1), Math.ceil(Math.max(max, 96) + 1)]) },
+      w: { range: () => [0, weightMax] },
+    },
+    axes: [
+      axis({ scale: "x", values: (u, v) => v.map((n) => n + " s") }),
+      axis({ scale: "y", side: 3, values: (u, v) => v.map((n) => n) }),
+      axis({ scale: "t", side: 1, grid: { show: false }, values: (u, v) => v.map((n) => n + "°") }),
+    ],
+    series: [
+      {},
+      // uPlot marks every sample while there are few of them, which a curve
+      // that starts empty always has.
+      { label: "bar", stroke: c.pressure, width: 2, scale: "y", points: { show: false } },
+      { label: "ml/s", stroke: c.flow, width: 1.5, dash: [5, 4], scale: "y", points: { show: false } },
+      { label: "°C", stroke: c.temp, width: 1.5, scale: "t", points: { show: false } },
+      { label: "g", stroke: c.weight, width: 1.5, scale: "w", spanGaps: true, points: { show: false } },
+    ],
+  }, [[], [], [], [], []], container);
+  const destroy = responsive(plot, container);
+  return {
+    update(samples) {
+      const first = samples[0];
+      if (!first) return plot.setData([[], [], [], [], []]);
+      // The machine's own clock for the first sample, arrival times after it:
+      // the sample after the run carries no reliable elapsed time.
+      const t0 = first.t - (first.process?.elapsedMs ?? 0);
+      const target = samples.at(-1).profile?.targetWeight;
+      weightMax = Math.max(LIVE_MIN_WEIGHT_G, (target ?? 0) * LIVE_WEIGHT_HEADROOM);
+      plot.setData([
+        samples.map((s) => (s.t - t0) / 1000),
+        // Once the run is over the sensor reads the boiler, not the puck.
+        samples.map((s) => (s.process?.active ? s.pressure.current : null)),
+        samples.map((s) => s.flow.puck ?? s.flow.pump),
+        samples.map((s) => s.temperature.current),
+        // The scale tares itself as the shot starts: a reading outside the
+        // axis is the cup or an untared scale, not coffee.
+        samples.map((s) => (s.weight != null && s.weight >= 0 && s.weight <= weightMax ? s.weight : null)),
+      ]);
+    },
+    destroy,
+  };
+}
+
 /**
  * Boiler temperature over hours: current temp, target as a faint step,
  * unreachable stretches as grey bands, shots as amber ticks.

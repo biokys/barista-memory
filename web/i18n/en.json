@@ -525,5 +525,8 @@
   "assistant.calls": "{n} calls",
   "assistant.tokens": "{in} tokens in, {out} out",
   "assistant.cost_unknown": "cost unknown",
-  "assistant.hint": "An estimate from the price list; caching makes repeated questions cheaper. The key lives in the environment only, never in the database or an export."
+  "assistant.hint": "An estimate from the price list; caching makes repeated questions cheaper. The key lives in the environment only, never in the database or an export.",
+  "live.brewing": "Brewing now",
+  "live.finished": "Just pulled",
+  "live.note": "A live view from the machine; weight is the scale's raw reading. The archived shot is the record."
 }
