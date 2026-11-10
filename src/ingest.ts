@@ -91,6 +91,45 @@ export function recomputeMachineContext(db: DatabaseSync, all = false): number {
   return changed;
 }
 
+/**
+ * Below this a device timestamp is not a date. The controller sets its clock
+ * over NTP only when Wi-Fi is up at boot; otherwise it stamps seconds since
+ * boot, and shot 221 (2026-11-10, after a morning of Wi-Fi trouble) read
+ * 1970-01-01 00:12 — last in every list, and matched to no heating episode.
+ */
+const UNSET_CLOCK_BEFORE = 1_000_000_000;
+
+/**
+ * When the shot started. The device's word, unless its clock was unset: then
+ * the shot is placed so it ended now. It is archived on the first pass after
+ * it ends, so that is late by up to a pass (30 s) — more if the machine was
+ * unreachable in between. `cli set-shot-time` corrects it further.
+ */
+function realStart(entry: IndexEntry): number {
+  if (entry.timestamp >= UNSET_CLOCK_BEFORE) return entry.timestamp;
+  return Math.floor(Date.now() / 1000 - (entry.duration ?? 0) / 1000);
+}
+
+/**
+ * Put an archived shot's start time right. The device's own timestamp is kept
+ * in device_started_at (once, the first time), so ingest still recognises the
+ * shot on the device and does not archive it again; the machine context is
+ * re-derived for the new time.
+ */
+export function setShotTime(db: DatabaseSync, id: number, startedAt: number): boolean {
+  const changed = db
+    .prepare(
+      `UPDATE shots SET device_started_at = COALESCE(device_started_at, started_at), started_at = ?,
+         machine_powered_for_s = NULL, machine_heating_for_s = NULL, machine_heatup_s = NULL,
+         machine_settled = NULL, machine_settledness = NULL
+       WHERE id = ?`
+    )
+    .run(startedAt, id).changes;
+  if (!changed) return false;
+  recomputeMachineContext(db);
+  return true;
+}
+
 /** Notes typed on the machine after this long are still picked up for recent shots. */
 const NOTES_REFRESH_S = 3600;
 const NOTES_RECENT_S = 3 * 86400;
@@ -166,16 +205,18 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
 
   const archivedRows = db
     .prepare(
-      `SELECT id, device_id, started_at, incomplete, length(raw_slog) > 0 AS has_log,
-              device_rating, device_notes_at FROM shots`
+      `SELECT id, device_id, COALESCE(device_started_at, started_at) AS device_ts, incomplete,
+              length(raw_slog) > 0 AS has_log, device_rating, device_notes_at FROM shots`
     )
     .all() as Array<{
-      id: number; device_id: number | null; started_at: number; incomplete: number; has_log: number;
+      id: number; device_id: number | null; device_ts: number; incomplete: number; has_log: number;
       device_rating: number | null; device_notes_at: number | null;
     }>;
+  // Matched on the device's own timestamp: a shot whose started_at was put
+  // right (unset clock, see realStart) keeps the device's in device_started_at.
   const sameShot = (deviceId: number, startedAt: number) => `${deviceId}@${startedAt}`;
   const known = new Map(
-    archivedRows.filter((row) => row.device_id != null).map((row) => [sameShot(row.device_id!, row.started_at), row])
+    archivedRows.filter((row) => row.device_id != null).map((row) => [sameShot(row.device_id!, row.device_ts), row])
   );
   const usedIds = new Set(archivedRows.map((row) => row.id));
   let maxId = archivedRows.reduce((max, row) => Math.max(max, row.id), 0);
@@ -206,12 +247,12 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
 
   const insert = db.prepare(
     `INSERT OR IGNORE INTO shots
-       (id, device_id, started_at, profile_id, profile_name, duration_ms, final_weight_g,
+       (id, device_id, started_at, device_started_at, profile_id, profile_name, duration_ms, final_weight_g,
         stable_weight_g, stable_weight_source,
         machine_powered_for_s, machine_heating_for_s, machine_heatup_s, machine_settled,
         machine_settledness,
         device_rating, incomplete, raw_slog, ingested_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   // Sessions are reconstructed once per pass, not once per shot: the state
@@ -278,13 +319,15 @@ export async function ingestOnce(db: DatabaseSync): Promise<IngestResult> {
       }
 
       const derived = deriveWeight(slog, entry.id, entry.volume);
-      const machine = machineContextForShot(sessions, entry.timestamp, samples, coldBaseline(db, entry.timestamp));
+      const startedAt = realStart(entry);
+      const machine = machineContextForShot(sessions, startedAt, samples, coldBaseline(db, startedAt));
       const archiveId = usedIds.has(entry.id) ? maxId + 1 : entry.id;
 
       insert.run(
         archiveId,
         entry.id,
-        entry.timestamp,
+        startedAt,
+        startedAt === entry.timestamp ? null : entry.timestamp,
         entry.profileId || null,
         entry.profileName || null,
         entry.duration,

@@ -122,6 +122,11 @@ and the next pass would archive it again. A run that was not a coffee is
 reclassified (`setShotKind`, kinds shot | flush | rinse); only `kind = 'shot'`
 reaches `shot_context`, so it leaves every statistic and stays archived
 (three rinses on a profile not flagged utility, 2026-10-07).
+A device that booted without Wi-Fi has no clock and stamps seconds since
+boot (shot 221 read 1970-01-01 00:12, 2026-11-10). Ingest places such a shot
+at "ended now" and keeps the device's stamp in `device_started_at`; matching
+uses `COALESCE(device_started_at, started_at)`, so `cli set-shot-time` can put
+`started_at` right without the next pass archiving the shot a second time.
 
 **The device's own notes are archived verbatim** in `shots.device_notes`.
 What is typed into the machine's web UI exists only there. They are read
@@ -339,6 +344,7 @@ npm run cli -- show      # what context is in force
 npm run cli -- ingest    # one archive pass
 npm run cli -- recompute-weights [--all]   # re-derive stable weights from stored logs
 npm run cli -- recompute-context [--all]   # re-derive machine warm-up context
+npm run cli -- set-shot-time --id N --at ISO # put a shot's start right (machine clock was unset)
 npm run cli -- maintenance               # where each cleaning routine stands
 npm run cli -- maintenance-done cafiza   # log a routine (backflush|cafiza|descale|water_filter|gasket)
 npm run cli -- calibrate                   # bloom temperature vs. settledness, to tune TAU_HEAT

@@ -22,6 +22,11 @@ CREATE TABLE IF NOT EXISTS shots (
   -- and is archived under the next free id instead.
   device_id      INTEGER,
   started_at     INTEGER NOT NULL,             -- unix seconds, from the device
+  -- The device's own timestamp, kept only when started_at had to be put
+  -- right: a controller that has not synced its clock (it booted without
+  -- Wi-Fi) stamps seconds since boot, so shot 221 read 1970-01-01 00:12.
+  -- Ingest matches device shots on COALESCE(device_started_at, started_at).
+  device_started_at INTEGER,
   profile_id     TEXT,
   profile_name   TEXT,
   duration_ms    INTEGER,

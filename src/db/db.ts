@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 
 /** Bump when a migration is added below. */
-const SCHEMA_VERSION = 10;
+const SCHEMA_VERSION = 11;
 
 /**
  * Changes that CREATE ... IF NOT EXISTS cannot make on their own.
@@ -17,6 +17,15 @@ const SCHEMA_VERSION = 10;
  * database too, because a new file also starts at user_version 0.
  */
 function migrate(db: DatabaseSync, from: number): void {
+  if (from < 11) {
+    // shots.device_started_at: the device's timestamp when started_at was
+    // corrected. A fresh database gets it from schema.sql (no shots table yet).
+    const columns = db.prepare("PRAGMA table_info(shots)").all() as Array<{ name: string }>;
+    if (columns.length > 0 && !columns.some((column) => column.name === "device_started_at")) {
+      db.exec("ALTER TABLE shots ADD COLUMN device_started_at INTEGER");
+    }
+  }
+
   // Version 2 only adds machine_state, which CREATE TABLE IF NOT EXISTS
   // handles on its own; no step is needed here.
   if (from < 7) {
