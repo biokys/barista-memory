@@ -13,6 +13,7 @@ import { printShot, printTest, printerStatus, printerSettings, updatePrinterSett
 import { bluetoothAvailable } from "../printer/bluez.js";
 import { exportArchive, importArchive } from "../transfer.js";
 import { liveStatus, machineReachable } from "../liveStatus.js";
+import { liveTelemetry } from "../liveTelemetry.js";
 import { groupSettings } from "../device/machineSettings.js";
 import { currentConditions, powerSessions, allStateSamples, coldBaseline, type StateRow } from "../machineState.js";
 import { massTemperatureSeries, settledness } from "../thermalModel.js";
@@ -142,6 +143,41 @@ async function requireMachine(res: ServerResponse): Promise<boolean> {
 
 route("GET", "/api/version", async (_req, res) => {
   json(res, 200, VERSION);
+});
+
+/** Keeps idle SSE connections alive through proxies (HA ingress) that time them out. */
+const LIVE_PING_MS = 15_000;
+/** A client this far behind is not reading; drop it rather than buffer without bound. */
+const LIVE_MAX_BUFFER = 1_000_000;
+/** One broadcast event reaches every client as the same object: serialise it once. */
+const sseFrames = new WeakMap<object, string>();
+function sseFrame(e: { event: string; data: unknown }): string {
+  let frame = sseFrames.get(e);
+  if (!frame) { frame = `event: ${e.event}\ndata: ${JSON.stringify(e.data)}\n\n`; sseFrames.set(e, frame); }
+  return frame;
+}
+
+// Live telemetry as Server-Sent Events. Only the framing lives here; the
+// merge, run buffer and online state are in liveTelemetry.ts.
+route("GET", "/api/live", async (req, res) => {
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-store",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.write("retry: 5000\n\n");
+  let detach = () => {};
+  const ping = setInterval(() => { if (!res.writableEnded) res.write(": ping\n\n"); }, LIVE_PING_MS);
+  const close = () => { clearInterval(ping); detach(); };
+  detach = liveTelemetry().attach((e) => {
+    if (res.writableEnded || res.destroyed) return;
+    if (res.writableLength > LIVE_MAX_BUFFER) { close(); res.destroy(); return; }
+    res.write(sseFrame(e));
+  });
+  // The response's close is the connection going away; the request's can
+  // fire as soon as its (empty) body has been consumed.
+  res.on("close", close);
 });
 
 route("GET", "/api/now", async (_req, res) => {
