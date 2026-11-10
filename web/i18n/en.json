@@ -46,6 +46,8 @@
   "now.all_shots": "All shots",
   "now.grind": "grind",
   "now.dose": "dose",
+  "kiosk.finer": "Finer",
+  "kiosk.coarser": "Coarser",
   "now.no_setup": "No setup — record one under “Grinding”.",
   "history.title": "History",
   "history.all_beans": "All beans",

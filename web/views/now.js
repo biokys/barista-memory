@@ -95,18 +95,13 @@ function shotRow(shot) {
     </a>`;
 }
 
-/** The modes a person can switch to from here; grind is the grinder's business. */
-const MODES = ["standby", "brew", "steam", "water"];
-
-export async function renderNow(view) {
-  const draw = (now) => {
-    const m = now.machine, s = now.setup, recent = now.recent_shots ?? [];
-    const r = readiness(m.settledness, m.reachable);
-    view.innerHTML = `
-      <div class="hero">
-        <section class="card">
+/** The machine card, shared with the kiosk's machine screen. */
+export function machineCard(m) {
+  const r = readiness(m.settledness, m.reachable);
+  return `
+        <section class="card machine-card">
           <div class="card-head"><h2>${t("machine.title")}</h2><span class="pill ${m.reachable ? (m.trend === "heating" ? "warn" : "ok") : ""}">${stateLabel(m)}</span></div>
-          <div class="big num">${m.reachable ? m.current_temp.toFixed(1) : "–"}<small>°C${m.reachable && m.target_temp > 0 ? " · " + t("machine.target") + " " + m.target_temp : ""}</small></div>
+          <div class="big num"><span data-live-temp>${m.reachable ? m.current_temp.toFixed(1) : "–"}</span><small>°C${m.reachable && m.target_temp > 0 ? " · " + t("machine.target") + " " + m.target_temp : ""}</small></div>
           <div class="gauge" title="${t("machine.settledness_hint")}"><i style="width:${m.settledness ?? 0}%"></i></div>
           <div class="row spread" style="margin-top:10px">
             <span class="muted small">${t("machine.settledness")}: <b class="num">${fmt.pct(m.settledness)}</b></span>
@@ -122,7 +117,42 @@ export async function renderNow(view) {
           <div class="seg" style="margin-top:18px" role="group" aria-label="${t("machine.control")}">
             ${MODES.map((mode) => `<button type="button" data-mode="${mode}" class="${m.reachable && m.mode_name === mode ? "active" : ""}" ${m.reachable ? "" : "disabled"}>${t("machine.mode." + mode)}</button>`).join("")}
           </div>
-        </section>
+        </section>`;
+}
+
+/** The modes a person can switch to from here; grind is the grinder's business. */
+const MODES = ["standby", "brew", "steam", "water"];
+
+/** The "coffee at" time input changed: keep it; true when the card should redraw. */
+export function onPlanChange(e) {
+  if (e.target.id !== "coffee-at") return false;
+  try { localStorage.setItem(PLAN_KEY, e.target.value); } catch {}
+  return true;
+}
+
+/**
+ * A tap on one of the machine card's mode buttons. One handler on the view,
+ * since a redraw replaces the buttons on every poll.
+ */
+export async function onModeClick(view, e, redraw) {
+  const button = e.target.closest("[data-mode]");
+  if (!button || button.disabled || button.classList.contains("active")) return;
+  view.querySelectorAll("[data-mode]").forEach((b) => (b.disabled = true));
+  try {
+    await api.setMode(button.dataset.mode);
+    toast(t("machine.mode_changed", { mode: t("machine.mode." + button.dataset.mode) }));
+  } catch (err) {
+    toast(t("machine.mode_failed") + " " + err.message, "bad");
+  }
+  await redraw();
+}
+
+export async function renderNow(view) {
+  const draw = (now) => {
+    const m = now.machine, s = now.setup, recent = now.recent_shots ?? [];
+    view.innerHTML = `
+      <div class="hero">
+        ${machineCard(m)}
         <section class="card">
           <div class="card-head"><h2>${t("now.brewing")}</h2><a class="btn sm ghost" href="#/setup">${t("setup.change")}</a></div>
           ${s ? `
@@ -148,24 +178,8 @@ export async function renderNow(view) {
       </section>`;
   };
   let latest = null;
-  const onChange = (e) => {
-    if (e.target.id !== "coffee-at") return;
-    try { localStorage.setItem(PLAN_KEY, e.target.value); } catch {}
-    if (latest) draw(latest);
-  };
-  // One handler on the view, since draw() replaces the buttons on every poll.
-  const onClick = async (e) => {
-    const button = e.target.closest("[data-mode]");
-    if (!button || button.disabled || button.classList.contains("active")) return;
-    view.querySelectorAll("[data-mode]").forEach((b) => (b.disabled = true));
-    try {
-      await api.setMode(button.dataset.mode);
-      toast(t("machine.mode_changed", { mode: t("machine.mode." + button.dataset.mode) }));
-    } catch (err) {
-      toast(t("machine.mode_failed") + " " + err.message, "bad");
-    }
-    draw(await api.now());
-  };
+  const onChange = (e) => { if (onPlanChange(e) && latest) draw(latest); };
+  const onClick = (e) => onModeClick(view, e, async () => draw(await api.now()));
   const drawLatest = (now) => { latest = now; draw(now); };
   drawLatest(await api.now());
   // The view element outlives this screen, so everything attached to it or to

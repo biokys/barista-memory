@@ -310,3 +310,31 @@ select option { background: var(--surface-2); color: var(--text); }
 .chat-form { display: flex; gap: 8px; align-items: flex-end; }
 .chat-form textarea { flex: 1; resize: none; min-height: 42px; background-color: var(--bg-2); border: 1px solid var(--line-2); border-radius: var(--radius-s); padding: 10px 12px; outline: none; }
 .chat-form textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(217,160,102,.15); }
+
+/* ---- kiosk (#/kiosk) ----
+   A fixed 800×480 touch display: no header, no page scroll, screens side by
+   side in a track moved by the page's own swipe. Card 700×400 with 50/40
+   margins, as drawn in Figma; the cards themselves are the home page's. */
+html.kiosk, html.kiosk body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+/* The page reserves a scrollbar gutter elsewhere; here it would be a dead strip. */
+html.kiosk { scrollbar-gutter: auto; }
+html.kiosk .top { display: none; }
+html.kiosk .view { max-width: none; padding: 0; height: 100%; display: block; }
+.kiosk-frame { position: relative; height: 100%; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+.kiosk-track { display: flex; height: 100%; transition: transform .28s cubic-bezier(.2,.7,.3,1); will-change: transform; }
+.kiosk-track.dragging { transition: none; }
+.kiosk-screen { flex: 0 0 100%; height: 100%; padding: 40px 50px; display: flex; }
+.kiosk-screen > .card { flex: 1; min-width: 0; overflow: hidden; }
+.kiosk-dots { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; gap: 8px; pointer-events: none; }
+.kiosk-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line-2); transition: background .2s; }
+.kiosk-dots i.active { background: var(--accent); }
+.kiosk .brewing-card .bean { font-size: 1.35rem; font-weight: 580; letter-spacing: -.02em; }
+.kiosk .brewing-card .stat-l { margin-top: 64px; font-size: .72rem; color: var(--text-3); text-transform: uppercase; letter-spacing: .08em; }
+/* Targets well over 60 px: a thumb, often a wet one, at arm's length. */
+.stepper { display: flex; align-items: center; justify-content: space-between; height: 80px; margin-top: 8px; padding: 4px;
+           border: 1px solid var(--line-2); border-radius: 999px; background-color: var(--surface-2); }
+.stepper button { width: 140px; height: 100%; border: 0; border-radius: 999px; background: transparent; color: var(--text); font-size: 1.9rem; cursor: pointer; }
+.stepper button:active { background-color: var(--line); }
+.stepper .value { min-width: 158px; height: 72px; padding: 0 24px; border-radius: 999px; display: grid; place-items: center;
+                  background-color: var(--accent); color: #1a120a; font-size: 2.6rem; font-weight: 500; }
+.kiosk .machine-card .big { font-size: 5rem; }

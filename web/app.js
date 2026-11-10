@@ -15,6 +15,7 @@ import { renderEvents } from "./views/events.js";
 import { renderProfiles } from "./views/profiles.js";
 import { renderSettings } from "./views/settings.js";
 import { renderAsk } from "./views/ask.js";
+import { renderKiosk } from "./views/kiosk.js";
 
 const routes = [
   { path: /^#\/?$/, view: renderNow, nav: "now" },
@@ -28,6 +29,8 @@ const routes = [
   { path: /^#\/settings\/?$/, view: renderSettings, nav: "settings" },
   { path: /^#\/ask\/?$/, view: renderAsk, nav: "ask" },
   { path: /^#\/profiles(?:\/([^/]+))?\/?$/, view: renderProfiles, nav: "profiles" },
+  // The touch display next to the machine: no navigation, see views/kiosk.js.
+  { path: /^#\/kiosk\/?$/, view: renderKiosk, nav: null },
 ];
 
 const NAV = ["now", "history", "machine", "stats", "setup", "coffees", "events", "profiles", "ask", "settings"];
