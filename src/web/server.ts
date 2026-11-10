@@ -15,7 +15,7 @@ import { exportArchive, importArchive } from "../transfer.js";
 import { liveStatus, machineReachable } from "../liveStatus.js";
 import { liveTelemetry } from "../liveTelemetry.js";
 import { groupSettings } from "../device/machineSettings.js";
-import { currentConditions, powerSessions, allStateSamples, coldBaseline, type StateRow } from "../machineState.js";
+import { currentConditions, powerSessions, allStateSamples, coldBaseline, machineActivity, type StateRow } from "../machineState.js";
 import { massTemperatureSeries, settledness } from "../thermalModel.js";
 import { changeMode, SWITCHABLE_MODES } from "../machineControl.js";
 import { handleMcpRequest, mcpEnabled } from "../mcp/http.js";
@@ -188,6 +188,8 @@ route("GET", "/api/kiosk", async (_req, res) => {
     setup: currentSetup(db),
     stock: currentStock(db),
     maintenance: maintenanceStatus(db).filter((m) => m.enabled),
+    // From the daemon's own samples: the kiosk Pi turns its backlight off by it.
+    machine: machineActivity(db),
     server_time: Math.floor(Date.now() / 1000),
   });
 });
