@@ -2,6 +2,66 @@ import { t } from "../lib/i18n.js";
 import { api } from "../lib/api.js";
 import { fmt, sparkline, toast, verdictText, verdictTone } from "../lib/fmt.js";
 import { usage, tone } from "../lib/maintenance.js";
+import { watchLive } from "../lib/live.js";
+import { liveChart } from "../lib/charts.js";
+
+/** A finished coffee keeps its live card this long; by then it is in the archive below. */
+const LIVE_KEEP_MS = 10 * 60000;
+
+/**
+ * The coffee being pulled, from the live stream. The card is its own node,
+ * taken out and put back around every redraw of the view, so the chart
+ * survives the 20 s poll that replaces everything else.
+ */
+function liveCard() {
+  const el = document.createElement("section");
+  el.className = "card";
+  el.hidden = true;
+  const stat = (key, label) => `<div class="stat"><span class="v num" data-live="${key}">–</span><span class="l" data-live-label="${key}">${label}</span></div>`;
+  el.innerHTML = `
+    <div class="card-head"><h2 data-live="title"></h2><span class="pill accent" data-live="phase"></span></div>
+    <div class="live-stats">
+      ${stat("time", t("shot.time"))}${stat("weight", t("shot.weight"))}${stat("pressure", t("shot.pressure"))}${stat("flow", t("shot.flow"))}${stat("temp", t("shot.temperature"))}
+    </div>
+    <div class="chart chart-live"></div>
+    <p class="faint small" style="margin-top:10px">${t("live.note")}</p>`;
+  const cell = (key) => el.querySelector(`[data-live="${key}"]`);
+  let chart = null;
+  let samples = [];
+
+  const paint = () => {
+    const last = samples.at(-1);
+    const active = last?.process?.active === true;
+    const show = last != null && (active || Date.now() - last.t < LIVE_KEEP_MS);
+    el.hidden = !show;
+    if (!show) return;
+    // Created only once visible: a hidden container has no width to draw in.
+    chart ??= liveChart(el.querySelector(".chart-live"));
+    chart.update(samples);
+    const first = samples[0];
+    const target = last.profile?.targetWeight;
+    cell("title").textContent = t(active ? "live.brewing" : "live.finished");
+    cell("phase").textContent = last.process?.phase ?? "";
+    cell("phase").hidden = !last.process?.phase;
+    cell("time").textContent = fmt.seconds((last.t - first.t + (first.process?.elapsedMs ?? 0)) / 1000);
+    cell("weight").textContent = fmt.g(last.weight);
+    el.querySelector('[data-live-label="weight"]').textContent = t("shot.weight") + (target ? ` / ${target} g` : "");
+    // After the run the sensor reads the boiler; the last pressure of the run stays.
+    const pressure = samples.findLast((s) => s.process?.active)?.pressure.current;
+    cell("pressure").textContent = fmt.bar(pressure);
+    const flow = last.flow.puck ?? last.flow.pump;
+    cell("flow").textContent = flow == null ? "–" : `${flow.toFixed(1)} ml/s`;
+    cell("temp").textContent = fmt.temp(last.temperature.current);
+  };
+
+  return {
+    el,
+    setRun(next) { samples = next; paint(); },
+    /** Re-checks whether a finished coffee has aged out. */
+    refresh: paint,
+    destroy() { chart?.destroy(); chart = null; },
+  };
+}
 
 function stateLabel(m) {
   if (!m.reachable) return t("machine.off");
@@ -99,14 +159,16 @@ function shotRow(shot) {
 const MODES = ["standby", "brew", "steam", "water"];
 
 export async function renderNow(view) {
+  const live = liveCard();
   const draw = (now) => {
     const m = now.machine, s = now.setup, recent = now.recent_shots ?? [];
     const r = readiness(m.settledness, m.reachable);
+    live.el.remove();
     view.innerHTML = `
       <div class="hero">
         <section class="card">
           <div class="card-head"><h2>${t("machine.title")}</h2><span class="pill ${m.reachable ? (m.trend === "heating" ? "warn" : "ok") : ""}">${stateLabel(m)}</span></div>
-          <div class="big num">${m.reachable ? m.current_temp.toFixed(1) : "–"}<small>°C${m.reachable && m.target_temp > 0 ? " · " + t("machine.target") + " " + m.target_temp : ""}</small></div>
+          <div class="big num"><span data-now="temp">${m.reachable ? m.current_temp.toFixed(1) : "–"}</span><small>°C${m.reachable && m.target_temp > 0 ? " · " + t("machine.target") + " " + m.target_temp : ""}</small></div>
           <div class="gauge" title="${t("machine.settledness_hint")}"><i style="width:${m.settledness ?? 0}%"></i></div>
           <div class="row spread" style="margin-top:10px">
             <span class="muted small">${t("machine.settledness")}: <b class="num">${fmt.pct(m.settledness)}</b></span>
@@ -146,6 +208,8 @@ export async function renderNow(view) {
         <div class="card-head"><h2>${t("now.recent_shots")}</h2>${recent.length ? `<a class="btn sm ghost" href="#/shots">${t("now.all_shots")}</a>` : ""}</div>
         ${recent.length ? `<div class="list">${recent.map(shotRow).join("")}</div>` : `<p class="empty">${t("now.none")}</p>`}
       </section>`;
+    view.prepend(live.el);
+    live.refresh();
   };
   let latest = null;
   const onChange = (e) => {
@@ -175,7 +239,20 @@ export async function renderNow(view) {
   view.addEventListener("change", onChange);
   view.addEventListener("click", onClick);
   document.addEventListener("live", onLive);
+  const stopLive = watchLive({
+    onRun: (samples) => live.setRun(samples),
+    // Between polls the big figure follows the stream; the rest of the card
+    // is derived on the server and waits for the next api/now.
+    onStatus: (status) => {
+      // Only while the card itself says the machine is on: the two must not disagree.
+      if (!latest?.machine.reachable || status.temperature.current == null) return;
+      const temp = view.querySelector('[data-now="temp"]');
+      if (temp) temp.textContent = status.temperature.current.toFixed(1);
+    },
+  });
   return () => {
+    stopLive();
+    live.destroy();
     view.removeEventListener("change", onChange);
     view.removeEventListener("click", onClick);
     document.removeEventListener("live", onLive);

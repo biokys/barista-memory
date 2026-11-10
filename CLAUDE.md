@@ -203,6 +203,10 @@ the kiosk is usually the only viewer, and letting go at once wiped the run it
 reconnects for after a Wi-Fi drop. On firmware 1.9.0 (recorded 2026-11-04) the state half repeats every
 ~10 s as well as on change, scale weight is in the telemetry (`bw`), and the
 `process` block outlives the run as `a: 0`, `l: "Finished"` for minutes.
+The web UI's `web/lib/live.js` (one `EventSource` per page, feeding the top
+bar and the live card on the home page) gets the run only on connect and
+extends it from the status events by the same rule, so `isCoffee` and the
+run buffer logic exist twice: change them in both places.
 
 **A powered-off machine is silent, not refusing.** ARP gets no answer, so
 every request waits out its full timeout; with the daemon's 10 s each page of

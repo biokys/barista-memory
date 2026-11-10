@@ -521,5 +521,8 @@
   "assistant.calls": "{n} volání",
   "assistant.tokens": "{in} tokenů dovnitř, {out} ven",
   "assistant.cost_unknown": "cena neznámá",
-  "assistant.hint": "Odhad podle ceníku; cache snižuje cenu opakovaných dotazů. Klíč je jen v prostředí, ne v databázi ani v exportu."
+  "assistant.hint": "Odhad podle ceníku; cache snižuje cenu opakovaných dotazů. Klíč je jen v prostředí, ne v databázi ani v exportu.",
+  "live.brewing": "Právě teče",
+  "live.finished": "Právě dotekla",
+  "live.note": "Živý náhled ze stroje, váha je syrové čtení váhy. Záznamem je shot v archivu."
 }
