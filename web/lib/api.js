@@ -16,6 +16,7 @@ let assistantStatus = null;
 
 export const api = {
   now: () => call("GET", "api/now"),
+  kiosk: () => call("GET", "api/kiosk"),
   shots: (q = {}) => call("GET", "api/shots?" + new URLSearchParams(q)),
   shot: (id) => call("GET", `api/shots/${id}`),
   rate: (id, rating, note) => call("POST", `api/shots/${id}/rating`, { rating, note }),

@@ -1,13 +1,16 @@
 import { t } from "../lib/i18n.js";
 import { api } from "../lib/api.js";
 import { fmt, toast } from "../lib/fmt.js";
-import { machineCard, onModeClick, onPlanChange } from "./now.js";
+import { usage, tone } from "../lib/maintenance.js";
 
 /**
  * The kiosk: a fixed 800×480 touch display next to the machine. Screens sit
  * side by side and are switched by a swipe this page handles itself — touch
  * scrolling in WPE (the kiosk's browser) is unreliable and turns many drags
  * into taps, so nothing here scrolls and a drag never reaches a button.
+ *
+ * Everything it shows comes from the archive (api/kiosk), never from the
+ * machine: it runs all day, and the machine's Wi-Fi is the weakest link.
  */
 
 /** Grind changes are saved once the presses stop, as one setup period, not one per step. */
@@ -16,25 +19,49 @@ const GRIND_SAVE_MS = 1500;
 const DRAG_PX = 12;
 /** Past this share of the width, a released swipe moves to the next screen. */
 const SWIPE_SHARE = 0.18;
-const REFRESH_MS = 10_000;
+/** Nothing on screen changes faster than a coffee is made. */
+const REFRESH_MS = 60_000;
 
-function brewingCard(now, grind) {
-  const s = now.setup;
+function brewingCard(data, grind) {
+  const s = data.setup;
   if (!s) return `<section class="card"><div class="card-head"><h2>${t("now.brewing")}</h2></div><p class="muted">${t("now.no_setup")}</p></section>`;
   return `
     <section class="card brewing-card">
-      <div class="card-head"><h2>${t("now.brewing")}</h2></div>
+      <h2>${t("now.brewing")}</h2>
       <div class="bean">${s.bean ?? "?"}</div>
-      <div class="muted">${s.roaster ?? ""}${s.roast_date ? " · " + s.roast_date : ""}</div>
-      <p class="faint small" style="margin-top:14px">${t("setup.since")} ${fmt.dateTime(s.valid_from)}</p>
-      ${now.stock?.remaining_g != null ? `<p class="small" style="margin-top:6px">${now.stock.low ? `<span class="pill warn">${t("now.stock_low")}</span> ` : ""}${t("now.stock", { g: now.stock.remaining_g, days: now.stock.days_left != null ? t("coffees.days", { n: now.stock.days_left }) : "–" })}</p>` : ""}
-      <div class="stat-l">${t("now.grind")}</div>
+      <div class="roaster">${s.roaster ?? ""}${s.roast_date ? " · " + s.roast_date : ""}</div>
+      <p class="since">${t("setup.since")} ${fmt.dateTime(s.valid_from)}</p>
+      ${data.stock?.remaining_g != null ? `<p class="stock">${data.stock.low ? `<span class="pill warn">${t("now.stock_low")}</span> ` : ""}${t("now.stock", { g: data.stock.remaining_g, days: data.stock.days_left != null ? t("coffees.days", { n: data.stock.days_left }) : "–" })}</p>` : ""}
+      <div class="label grind-label">${t("now.grind")}</div>
       <div class="stepper">
         <button type="button" data-grind="-1" aria-label="${t("kiosk.finer")}">−</button>
         <span class="value num" data-grind-value>${grind ?? "–"}</span>
         <button type="button" data-grind="1" aria-label="${t("kiosk.coarser")}">+</button>
       </div>
-      <div class="stat" style="margin-top:14px"><span class="v num">${s.dose_g != null ? s.dose_g + " g" : "–"}</span><span class="l">${t("now.dose")}</span></div>
+      <div class="dose num">${s.dose_g != null ? s.dose_g + " g" : "–"}</div>
+      <div class="label">${t("now.dose")}</div>
+    </section>`;
+}
+
+function dueText(m) {
+  if (m.due_in_days == null) return "–";
+  return m.due_in_days === 0 ? t("kiosk.due_now") : t("kiosk.due_in", { n: m.due_in_days });
+}
+
+function maintenanceCard(data) {
+  const rows = data.maintenance ?? [];
+  return `
+    <section class="card maint-card">
+      <h2>${t("maint.title")}</h2>
+      ${rows.length ? rows.map((m) => `
+        <div class="kiosk-maint ${tone(m)}">
+          <div class="head">
+            <b>${t("maint.type." + m.key)}</b>
+            <span class="due ${tone(m)}">${dueText(m)}</span>
+          </div>
+          <div class="gauge"><i style="width:${Math.min(100, Math.round((m.fraction ?? 0) * 100))}%"></i></div>
+          <div class="usage num">${usage(m)}</div>
+        </div>`).join("") : `<p class="muted">${t("maint.log_empty")}</p>`}
     </section>`;
 }
 
@@ -44,7 +71,7 @@ export async function renderKiosk(view) {
   const themeBefore = root.dataset.theme;
   root.dataset.theme = "dark";
 
-  const [first, prefs] = await Promise.all([api.now(), api.preferences().catch(() => null)]);
+  const [first, prefs] = await Promise.all([api.kiosk(), api.preferences().catch(() => null)]);
   const scale = { min: prefs?.grind_min ?? 0, max: prefs?.grind_max ?? 90, step: prefs?.grind_step ?? 0.5 };
 
   let latest = first;
@@ -55,7 +82,7 @@ export async function renderKiosk(view) {
 
   view.innerHTML = `
     <div class="kiosk-frame">
-      <div class="kiosk-track"><div class="kiosk-screen" data-screen="brewing"></div><div class="kiosk-screen" data-screen="machine"></div></div>
+      <div class="kiosk-track"><div class="kiosk-screen"></div><div class="kiosk-screen"></div></div>
       <div class="kiosk-dots"><i></i><i></i></div>
     </div>`;
   const frame = view.querySelector(".kiosk-frame");
@@ -65,7 +92,7 @@ export async function renderKiosk(view) {
 
   const draw = () => {
     screens[0].innerHTML = brewingCard(latest, pendingGrind ?? latest.setup?.grind_setting);
-    screens[1].innerHTML = machineCard(latest.machine);
+    screens[1].innerHTML = maintenanceCard(latest);
   };
   const place = (offsetPx = 0) => {
     track.style.transform = `translateX(calc(${-index * 100}% + ${offsetPx}px))`;
@@ -74,7 +101,7 @@ export async function renderKiosk(view) {
   draw(); place();
 
   const refresh = async () => {
-    try { latest = await api.now(); draw(); } catch { /* the next poll tries again */ }
+    try { latest = await api.kiosk(); draw(); } catch { /* the next poll tries again */ }
   };
 
   // ---- grind -------------------------------------------------------------
@@ -152,26 +179,10 @@ export async function renderKiosk(view) {
   const onClickCapture = (e) => {
     if (swallowClick) { swallowClick = false; e.preventDefault(); e.stopPropagation(); }
   };
-
-  // ---- taps --------------------------------------------------------------
   const onClick = (e) => {
     const grind = e.target.closest("[data-grind]");
-    if (grind) { stepGrind(Number(grind.dataset.grind)); return; }
-    onModeClick(view, e, refresh);
+    if (grind) stepGrind(Number(grind.dataset.grind));
   };
-  const onChange = (e) => { if (onPlanChange(e)) draw(); };
-
-  // ---- live temperature ----------------------------------------------------
-  // api/now every few seconds carries everything; the stream only moves the
-  // big number between polls, so it reads as live on the screen.
-  const live = new EventSource("api/live");
-  live.addEventListener("status", (e) => {
-    const s = JSON.parse(e.data);
-    const el = view.querySelector("[data-live-temp]");
-    if (el && s.temperature?.current != null && latest.machine?.reachable) el.textContent = s.temperature.current.toFixed(1);
-  });
-  live.addEventListener("online", refresh);
-  live.addEventListener("offline", refresh);
 
   frame.addEventListener("touchstart", onDown, { passive: true });
   frame.addEventListener("touchmove", onMove, { passive: true });
@@ -183,16 +194,13 @@ export async function renderKiosk(view) {
   frame.addEventListener("mouseleave", onCancel);
   frame.addEventListener("click", onClickCapture, true);
   view.addEventListener("click", onClick);
-  view.addEventListener("change", onChange);
   const timer = setInterval(refresh, REFRESH_MS);
 
   return () => {
     clearInterval(timer);
-    live.close();
     // A pressed grind is saved on the way out, not dropped.
     if (saveTimer) { clearTimeout(saveTimer); saveGrind(); }
     view.removeEventListener("click", onClick);
-    view.removeEventListener("change", onChange);
     root.classList.remove("kiosk");
     if (themeBefore) root.dataset.theme = themeBefore;
   };

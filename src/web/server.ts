@@ -180,6 +180,18 @@ route("GET", "/api/live", async (req, res) => {
   res.on("close", close);
 });
 
+// The kiosk's data: what is being ground and where maintenance stands. All of
+// it is in the archive, so unlike api/now this never asks the machine — the
+// kiosk polls it, and the machine's Wi-Fi is the weakest link in the house.
+route("GET", "/api/kiosk", async (_req, res) => {
+  json(res, 200, {
+    setup: currentSetup(db),
+    stock: currentStock(db),
+    maintenance: maintenanceStatus(db).filter((m) => m.enabled),
+    server_time: Math.floor(Date.now() / 1000),
+  });
+});
+
 route("GET", "/api/now", async (_req, res) => {
   const live = await liveStatus();
   const conditions = currentConditions(db, live);

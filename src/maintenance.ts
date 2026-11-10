@@ -56,7 +56,16 @@ export interface MaintenanceStatus {
   /** True when nothing is logged yet and the figures run from the archive's first shot. */
   since_archive_start: boolean;
   state: "never" | "ok" | "soon" | "due";
+  /**
+   * Days until it is due at the recent pace (shots and water of the last
+   * RATE_DAYS days), the soonest of its dimensions; 0 when due. Null when
+   * nothing has been used lately and it is not measured in days.
+   */
+  due_in_days: number | null;
 }
+
+/** The window the pace for due_in_days is taken from. */
+const RATE_DAYS = 14;
 
 /** At what fraction of the interval a routine is flagged as coming up. */
 const SOON_AT = 0.8;
@@ -74,6 +83,9 @@ export function maintenanceStatus(db: DatabaseSync, now = Math.floor(Date.now() 
   );
   const shotsSince = db.prepare("SELECT COUNT(*) AS n FROM shots WHERE kind = 'shot' AND started_at > ?");
   const waterSince = db.prepare("SELECT COALESCE(SUM(water_ml), 0) AS ml FROM shots WHERE started_at > ?");
+  const from = now - RATE_DAYS * 86400;
+  const shotsPerDay = (shotsSince.get(from) as { n: number }).n / RATE_DAYS;
+  const litresPerDay = (waterSince.get(from) as { ml: number }).ml / 1000 / RATE_DAYS;
 
   return types.map((type) => {
     const last = lastOf.get(JSON.stringify(SATISFIED_BY[type.key])) as { at: number; auto: number } | undefined;
@@ -92,6 +104,13 @@ export function maintenanceStatus(db: DatabaseSync, now = Math.floor(Date.now() 
     // all), which is still what tells the user when it is due.
     const fraction = fractions.length ? Math.max(...fractions) : last ? 0 : null;
 
+    const remaining = [
+      shots != null && type.interval_shots && shotsPerDay > 0 ? (type.interval_shots - shots) / shotsPerDay : null,
+      water != null && type.interval_water_l && litresPerDay > 0 ? (type.interval_water_l - water) / litresPerDay : null,
+      days != null && type.interval_days ? type.interval_days - days : null,
+    ].filter((d): d is number => d != null);
+    const dueIn = remaining.length ? Math.max(0, Math.round(Math.min(...remaining))) : null;
+
     return {
       key: type.key,
       enabled: type.enabled === 1,
@@ -106,6 +125,7 @@ export function maintenanceStatus(db: DatabaseSync, now = Math.floor(Date.now() 
       fraction: fraction != null ? Math.round(fraction * 100) / 100 : null,
       state: fraction == null ? "never" : fraction >= 1 ? "due" : fraction >= SOON_AT ? "soon" : "ok",
       since_archive_start: !last,
+      due_in_days: dueIn,
     };
   });
 }
