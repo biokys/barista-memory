@@ -16,6 +16,7 @@ import { liveStatus, machineReachable } from "../liveStatus.js";
 import { liveTelemetry } from "../liveTelemetry.js";
 import { groupSettings } from "../device/machineSettings.js";
 import { currentConditions, powerSessions, allStateSamples, coldBaseline, type StateRow } from "../machineState.js";
+import { kioskActivity } from "../kioskActivity.js";
 import { massTemperatureSeries, settledness } from "../thermalModel.js";
 import { changeMode, SWITCHABLE_MODES } from "../machineControl.js";
 import { handleMcpRequest, mcpEnabled } from "../mcp/http.js";
@@ -178,6 +179,25 @@ route("GET", "/api/live", async (req, res) => {
   // The response's close is the connection going away; the request's can
   // fire as soon as its (empty) body has been consumed.
   res.on("close", close);
+});
+
+// The kiosk's data: what is being ground and where maintenance stands. All of
+// it is in the archive, so unlike api/now this never asks the machine — the
+// kiosk polls it, and the machine's Wi-Fi is the weakest link in the house.
+route("GET", "/api/kiosk", async (_req, res) => {
+  json(res, 200, {
+    setup: currentSetup(db),
+    stock: currentStock(db),
+    maintenance: maintenanceStatus(db).filter((m) => m.enabled),
+    machine: kioskActivity(db),
+    server_time: Math.floor(Date.now() / 1000),
+  });
+});
+
+// The kiosk Pi turns its backlight off by this, every few seconds: the
+// machine's state alone, without the setup and maintenance api/kiosk adds.
+route("GET", "/api/kiosk/machine", async (_req, res) => {
+  json(res, 200, { machine: kioskActivity(db), server_time: Math.floor(Date.now() / 1000) });
 });
 
 route("GET", "/api/now", async (_req, res) => {

@@ -9,7 +9,7 @@
 import { config } from "./config.js";
 import { openDatabase, currentSetup } from "./db/db.js";
 import { recordSetup, updateSetup, type SetupChange } from "./setups.js";
-import { ingestOnce, recomputeStableWeights, recomputeMachineContext } from "./ingest.js";
+import { ingestOnce, recomputeStableWeights, recomputeMachineContext, setShotTime } from "./ingest.js";
 import { recomputeAnalysis } from "./anomaly.js";
 import { fetchStatus, parseSlog } from "./device/client.js";
 import { TAU_HEAT_MIN } from "./thermalModel.js";
@@ -64,6 +64,8 @@ function usage(): never {
       "  cli calibrate     Bloom temperature vs. modelled settledness, per shot (for tuning TAU_HEAT)",
       "  cli recompute-context [--all]",
       "      Re-derive each shot's machine warm-up context from machine_state.",
+      "  cli set-shot-time --id N --at <UNIX|ISO time>",
+      "      Put a shot's start time right (one stamped while the machine's clock was unset).",
       "  cli recompute-analysis [--all]",
       "      Re-derive each shot's curve flags (channeling, choked, off pattern) from the stored logs.",
     ].join("\n")
@@ -293,6 +295,21 @@ try {
     case "recompute-analysis": {
       const changed = recomputeAnalysis(db, args.all === "true");
       console.log(`analysed ${changed} shot(s)`);
+      break;
+    }
+
+    case "set-shot-time": {
+      const id = Number(args.id);
+      const at = /^\d+$/.test(args.at ?? "") ? Number(args.at) : Math.floor(Date.parse(args.at ?? "") / 1000);
+      if (!Number.isInteger(id) || !Number.isFinite(at)) {
+        console.error("set-shot-time needs --id N and --at UNIX or an ISO time with its offset");
+        process.exit(2);
+      }
+      if (!setShotTime(db, id, at)) {
+        console.error(`no shot #${id}`);
+        process.exit(1);
+      }
+      console.log(`shot #${id} now starts ${new Date(at * 1000).toISOString()}`);
       break;
     }
 

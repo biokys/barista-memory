@@ -402,3 +402,39 @@ export function coldBaseline(db: DatabaseSync, now = Math.floor(Date.now() / 100
 export function allStateSamples(db: DatabaseSync): StateRow[] {
   return db.prepare("SELECT * FROM machine_state ORDER BY sampled_at ASC").all() as unknown as StateRow[];
 }
+
+/** Rows read back to find where an idle stretch began; 500 heartbeats are over three days. */
+const IDLE_LOOKBACK_ROWS = 500;
+
+export interface MachineActivity {
+  /** "off" did not answer, "standby" answered in standby, "on" any other mode; null when the record is stale. */
+  state: "off" | "standby" | "on" | null;
+  /** When the current stretch of off and standby began; null while the machine is on or the record is stale. */
+  idle_since: number | null;
+}
+
+/**
+ * What the machine is doing by the last sample, without asking it: the kiosk
+ * dims its screen by this every half minute, and the machine's Wi-Fi is the
+ * weakest link. Off and standby are one stretch — a machine put into standby
+ * and then switched off has been idle since the standby.
+ *
+ * A record older than three heartbeats means the daemon stopped sampling, not
+ * that nothing changed, so it says nothing (and the kiosk stays lit).
+ */
+export function machineActivity(db: DatabaseSync, now = Math.floor(Date.now() / 1000)): MachineActivity {
+  const rows = db
+    .prepare("SELECT sampled_at, reachable, mode FROM machine_state ORDER BY sampled_at DESC LIMIT ?")
+    .all(IDLE_LOOKBACK_ROWS) as unknown as Array<Pick<StateRow, "sampled_at" | "reachable" | "mode">>;
+  const latest = rows[0];
+  if (!latest || now - latest.sampled_at > HEARTBEAT_S * 3) return { state: null, idle_since: null };
+  const stateOf = (r: (typeof rows)[number]) => (!r.reachable ? "off" : r.mode === 0 ? "standby" : "on");
+  const state = stateOf(latest);
+  if (state === "on") return { state, idle_since: null };
+  let since = latest.sampled_at;
+  for (const row of rows) {
+    if (stateOf(row) === "on") break;
+    since = row.sampled_at;
+  }
+  return { state, idle_since: since };
+}
